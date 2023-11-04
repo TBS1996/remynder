@@ -3,7 +3,7 @@ name = "remynder"
 version = "0.1.0"
 edition = "2021"
 description = "flashcards in terminal and stuff"
-license = "mit"
+license = "MIT OR Apache-2.0"
 
 
 
