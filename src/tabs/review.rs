@@ -8,7 +8,7 @@ use speki_backend::{
     Id,
 };
 
-use mischef::{App, Retning, Tab, View, Widget};
+use mischef::{Retning, Tab, View, Widget};
 
 use ratatui::prelude::*;
 
@@ -277,6 +277,12 @@ impl Tab for ReviewCard<'_> {
                 's' => {
                     card.set_suspended(IsSuspended::True);
                     return false;
+                }
+                'T' => {
+                    self.popup = Some(PopUp::NewDependent(AddCard::new(
+                        "Add new dependent".into(),
+                        card.category().to_owned(),
+                    )));
                 }
                 'Y' => {
                     self.popup = Some(PopUp::NewDependency(AddCard::new(

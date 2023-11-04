@@ -1,14 +1,11 @@
-use crossterm::event::{KeyCode, KeyEvent};
+
 use ratatui::prelude::Rect;
-use speki_backend::{cache::CardCache, card::Card, categories::Category, Id};
+use speki_backend::{cache::CardCache, categories::Category};
 
 use mischef::{Tab, View, Widget};
 
 use crate::{
-    popups::{AddCard, CatChoice, PopUpState},
-    split_off,
-    utils::{StatusBar, TextInput},
-    vsplit2,
+    popups::{AddCard, PopUpState},
 };
 
 pub struct CardAdder<'a> {

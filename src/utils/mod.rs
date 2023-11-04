@@ -3,11 +3,11 @@ use ratatui::{
     prelude::Rect,
     style::{Color, Modifier, Style},
     text::Line,
-    widgets::{List, ListItem, ListState, Paragraph, Wrap},
+    widgets::{List, ListItem, ListState},
     Frame,
 };
 use speki_backend::{cache::CardCache, Id};
-use tui_textarea::TextArea;
+
 use tui_tree_widget::{Tree, TreeItem, TreeState};
 
 use mischef::Widget;
@@ -212,10 +212,6 @@ impl<T> StatefulList<T> {
         self.state.select(Some(i));
     }
 
-    pub fn unselect(&mut self) {
-        self.state.select(None);
-    }
-
     pub fn selected(&self) -> Option<&T> {
         match self.state.selected() {
             Some(c) => Some(&self.items[c]),
@@ -227,7 +223,7 @@ impl<T> StatefulList<T> {
 impl Widget for StatefulList<Id> {
     type AppData = CardCache;
 
-    fn keyhandler(&mut self, cache: &mut CardCache, key: crossterm::event::KeyEvent) {
+    fn keyhandler(&mut self, _cache: &mut CardCache, key: crossterm::event::KeyEvent) {
         match key.code {
             crossterm::event::KeyCode::Up => self.previous(),
             crossterm::event::KeyCode::Down => self.next(),

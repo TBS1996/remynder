@@ -8,10 +8,10 @@ use review::ReviewCard;
 use speki_backend::cache::CardCache;
 use tracing_subscriber::{prelude::__tracing_subscriber_SubscriberExt, util::SubscriberInitExt};
 
-mod choose_category;
 mod popups;
 mod tabs;
 mod utils;
+mod widgets;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     crossterm::terminal::enable_raw_mode()?;

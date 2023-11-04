@@ -4,7 +4,6 @@ use speki_backend::{
     cache::CardCache,
     card::{Card, SavedCard},
     categories::Category,
-    Id,
 };
 
 use mischef::{Tab, View, Widget};
@@ -45,9 +44,11 @@ impl Default for AddCard<'_> {
 
 impl<'a> AddCard<'a> {
     pub fn new(message: String, category: Category) -> Self {
-        let mut s = Self::default();
-        s.category = category;
-        s.message = message;
+        let mut s = Self {
+            category,
+            message,
+            ..Default::default()
+        };
         s.refresh();
         s
     }

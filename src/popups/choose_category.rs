@@ -1,10 +1,10 @@
 use std::path::PathBuf;
 
-use crossterm::event::{KeyCode, KeyEvent};
+use crossterm::event::KeyCode;
 use mischef::{Tab, View, Widget};
-use ratatui::style::{Color, Style};
+
 use speki_backend::{cache::CardCache, categories::Category};
-use tui_tree_widget::{Tree, TreeItem, TreeState};
+use tui_tree_widget::TreeItem;
 
 use crate::utils::TreeWidget;
 
@@ -61,8 +61,10 @@ impl CatChoice<'_> {
         let b = build_tree_item(speki_backend::paths::get_cards_path());
         let tree = TreeWidget::new_with_items("choose category".into(), vec![b]);
         let popup_state = PopUpState::Continue;
-        let mut view = View::default();
-        view.is_selected = true;
+        let view = View {
+            is_selected: true,
+            ..Default::default()
+        };
 
         Self {
             tree,

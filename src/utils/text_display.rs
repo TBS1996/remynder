@@ -1,14 +1,12 @@
-use crossterm::event::KeyCode;
+
 use ratatui::{
     prelude::Rect,
-    style::{Color, Modifier, Style},
-    text::Line,
-    widgets::{List, ListItem, ListState, Paragraph, Wrap},
+    widgets::{Paragraph, Wrap},
     Frame,
 };
-use speki_backend::{cache::CardCache, Id};
-use tui_textarea::TextArea;
-use tui_tree_widget::{Tree, TreeItem, TreeState};
+use speki_backend::{cache::CardCache};
+
+
 
 use mischef::Widget;
 
