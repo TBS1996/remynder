@@ -8,16 +8,24 @@ use speki_backend::{
     Id,
 };
 
+use mischef::{App, Retning, Tab, View, Widget};
+
 use ratatui::prelude::*;
 
 use crate::{
-    hsplit2, split3, split_off,
-    ui_library::{Tab, View, Widget},
+    hsplit2,
+    popups::AddCard,
+    split3, split_off,
     utils::{card_dependencies, StatusBar, TreeWidget},
-    vsplit2, Retning,
+    vsplit2,
 };
 
 use Constraint as Bound;
+
+pub enum PopUp<'a> {
+    NewDependency(AddCard<'a>),
+    NewDependent(AddCard<'a>),
+}
 
 pub struct ReviewCard<'a> {
     pub filtered: Vec<Id>,
@@ -31,6 +39,7 @@ pub struct ReviewCard<'a> {
     pub card_info: StatusBar,
     pub info: StatusBar,
     pub view: View,
+    pub popup: Option<PopUp<'a>>,
 }
 
 impl std::fmt::Debug for ReviewCard<'_> {
@@ -81,6 +90,7 @@ impl ReviewCard<'_> {
             status: StatusBar::default(),
             card_info: StatusBar::default(),
             info: StatusBar::default(),
+            popup: None,
         };
 
         x.refresh(cache);
@@ -176,6 +186,8 @@ fn card_info(card: Id, cache: &mut CardCache) -> String {
 }
 
 impl Tab for ReviewCard<'_> {
+    type AppData = CardCache;
+
     fn set_selection(&mut self, area: Rect) {
         let (info_bar, area) = split_off(area, 1, Retning::Up);
 
@@ -202,8 +214,44 @@ impl Tab for ReviewCard<'_> {
             .extend([front, back, card_info_area, dependency_area, info_bar]);
     }
 
-    fn view(&mut self) -> &mut crate::ui_library::View {
+    fn view(&mut self) -> &mut View {
         &mut self.view
+    }
+
+    fn pop_up(&mut self) -> Option<&mut dyn Tab<AppData = Self::AppData>> {
+        self.popup.as_mut().map(|p| match p {
+            PopUp::NewDependency(p) => p as &mut dyn Tab<AppData = Self::AppData>,
+            PopUp::NewDependent(p) => p as &mut dyn Tab<AppData = Self::AppData>,
+        })
+    }
+
+    fn check_popup_value(&mut self, cache: &mut CardCache) {
+        let mut flag = false;
+        match &self.popup {
+            Some(PopUp::NewDependency(c)) => {
+                if let Some(val) = c.popstate.value() {
+                    if let Some(current) = self.current_card() {
+                        let mut current_card = cache.get_owned(current);
+                        current_card.set_dependency(val.id(), cache);
+                    }
+                    flag = true;
+                }
+            }
+            Some(PopUp::NewDependent(c)) => {
+                if let Some(val) = c.popstate.value() {
+                    if let Some(current) = self.current_card() {
+                        let mut current_card = cache.get_owned(current);
+                        current_card.set_dependent(val.id(), cache);
+                    }
+                    flag = true;
+                }
+            }
+            None => return,
+        };
+        if flag {
+            self.popup = None;
+            self.refresh(cache);
+        }
     }
 
     fn tab_keyhandler(
@@ -230,6 +278,12 @@ impl Tab for ReviewCard<'_> {
                     card.set_suspended(IsSuspended::True);
                     return false;
                 }
+                'Y' => {
+                    self.popup = Some(PopUp::NewDependency(AddCard::new(
+                        "Add new dependency".into(),
+                        card.category().to_owned(),
+                    )));
+                }
                 _ => {
                     if let Ok(grade) = c.to_string().parse::<speki_backend::card::Grade>() {
                         card.new_review(grade, Duration::default());
@@ -244,13 +298,13 @@ impl Tab for ReviewCard<'_> {
         true
     }
 
-    fn widgets(&mut self) -> Vec<&mut dyn crate::ui_library::Widget> {
+    fn widgets(&mut self) -> Vec<&mut dyn mischef::Widget<AppData = Self::AppData>> {
         vec![
-            &mut self.front as &mut dyn Widget,
-            &mut self.back as &mut dyn Widget,
-            &mut self.info as &mut dyn Widget,
-            &mut self.card_info as &mut dyn Widget,
-            &mut self.dependencies as &mut dyn Widget,
+            &mut self.front,
+            &mut self.back,
+            &mut self.info,
+            &mut self.card_info,
+            &mut self.dependencies,
         ]
     }
 
@@ -258,3 +312,5 @@ impl Tab for ReviewCard<'_> {
         "review"
     }
 }
+
+// Define a macro to easily collect widgets into a vector of trait objects.

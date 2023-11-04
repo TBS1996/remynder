@@ -1,11 +1,9 @@
+use mischef::{Tab, View, Widget};
 use speki_backend::{cache::CardCache, filter::FilterUtil, Id};
 
-use crate::{
-    hsplit2,
-    ui_library::{Tab, View, Widget},
-    utils::{StatefulList, StatusBar},
-    vsplit2,
-};
+use crate::utils::{StatefulList, StatusBar};
+
+use crate::{hsplit2, vsplit2};
 
 pub struct Browser {
     filter: FilterUtil,
@@ -36,6 +34,7 @@ impl Browser {
 }
 
 impl Tab for Browser {
+    type AppData = CardCache;
     fn set_selection(&mut self, area: ratatui::prelude::Rect) {
         let (list, sidebar) = hsplit2(area, 50, 50);
         let (up, down) = vsplit2(sidebar, 50, 50);
@@ -47,16 +46,12 @@ impl Tab for Browser {
         self.view.areas.extend([up, down, list]);
     }
 
-    fn view(&mut self) -> &mut crate::ui_library::View {
+    fn view(&mut self) -> &mut View {
         &mut self.view
     }
 
-    fn widgets(&mut self) -> Vec<&mut dyn crate::ui_library::Widget> {
-        vec![
-            &mut self.front_card as &mut dyn crate::ui_library::Widget,
-            &mut self.back_card as &mut dyn crate::ui_library::Widget,
-            &mut self.list as &mut dyn crate::ui_library::Widget,
-        ]
+    fn widgets(&mut self) -> Vec<&mut dyn mischef::Widget<AppData = Self::AppData>> {
+        vec![&mut self.front_card, &mut self.back_card, &mut self.list]
     }
 
     fn title(&self) -> &str {

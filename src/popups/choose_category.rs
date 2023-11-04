@@ -1,27 +1,14 @@
 use std::path::PathBuf;
 
 use crossterm::event::{KeyCode, KeyEvent};
+use mischef::{Tab, View, Widget};
 use ratatui::style::{Color, Style};
-use speki_backend::categories::Category;
+use speki_backend::{cache::CardCache, categories::Category};
 use tui_tree_widget::{Tree, TreeItem, TreeState};
 
-use crate::{
-    ui_library::{Tab, View, Widget},
-    utils::TreeWidget,
-};
+use crate::utils::TreeWidget;
 
-#[derive(Debug)]
-pub enum PopUpState<T: std::fmt::Debug> {
-    Exit,
-    Continue,
-    Resolve(T),
-}
-
-impl<T: std::fmt::Debug> Default for PopUpState<T> {
-    fn default() -> Self {
-        Self::Continue
-    }
-}
+use super::PopUpState;
 
 #[derive(Debug)]
 pub struct CatChoice<'a> {
@@ -31,17 +18,19 @@ pub struct CatChoice<'a> {
 }
 
 impl Tab for CatChoice<'_> {
+    type AppData = CardCache;
+
     fn set_selection(&mut self, area: ratatui::prelude::Rect) {
         self.tree.set_area(area);
         self.view.areas.extend([area]);
     }
 
-    fn view(&mut self) -> &mut crate::ui_library::View {
+    fn view(&mut self) -> &mut View {
         &mut self.view
     }
 
-    fn widgets(&mut self) -> Vec<&mut dyn Widget> {
-        vec![&mut self.tree as &mut dyn Widget]
+    fn widgets(&mut self) -> Vec<&mut dyn Widget<AppData = Self::AppData>> {
+        vec![&mut self.tree]
     }
 
     fn title(&self) -> &str {

@@ -2,6 +2,8 @@
 name = "remynder"
 version = "0.1.0"
 edition = "2021"
+description = "flashcards in terminal and stuff"
+
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
@@ -13,8 +15,8 @@ tui-textarea = "*"
 tui-tree-widget = "*"
 tordir = "0.1.0"
 
-#sentry = { version = "0.31.7", features = ["tracing", "tower", "log"] }
 sentry = { version = "0.31.7", features = ["tracing"] }
 tracing = "0.1"
 tracing-subscriber = "0.3"
 serde_json = "1.0.108"
+mischef = "0.1.1"

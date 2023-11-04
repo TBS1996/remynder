@@ -761,6 +761,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "mischef"
+version = "0.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "fb7ea7bce0bd62637aa46a2593ad9e36c17bc29fc1b8afe213c78f2435b1a4fe"
+dependencies = [
+ "crossterm",
+ "ratatui",
+]
+
+[[package]]
 name = "native-tls"
 version = "0.2.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1130,6 +1140,7 @@ name = "remynder"
 version = "0.1.0"
 dependencies = [
  "crossterm",
+ "mischef",
  "ratatui",
  "sentry",
  "serde_json",

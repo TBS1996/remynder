@@ -1,11 +1,17 @@
 use crossterm::event::{KeyCode, KeyEvent};
 use ratatui::prelude::Rect;
-use speki_backend::{cache::CardCache, card::Card, categories::Category, Id};
+use speki_backend::{
+    cache::CardCache,
+    card::{Card, SavedCard},
+    categories::Category,
+    Id,
+};
+
+use mischef::{Tab, View, Widget};
 
 use crate::{
-    choose_category::{CatChoice, PopUpState},
+    popups::{CatChoice, PopUpState},
     split_off,
-    ui_library::{Tab, View, Widget},
     utils::{StatusBar, TextInput},
     vsplit2,
 };
@@ -18,7 +24,8 @@ pub struct AddCard<'a> {
     category: Category,
     view: View,
     choose_category: Option<CatChoice<'a>>,
-    popstate: PopUpState<Id>,
+    message: String,
+    pub popstate: PopUpState<SavedCard>,
 }
 
 impl Default for AddCard<'_> {
@@ -31,19 +38,22 @@ impl Default for AddCard<'_> {
             view: View::default(),
             choose_category: None,
             popstate: PopUpState::Continue,
+            message: String::default(),
         }
     }
 }
 
 impl<'a> AddCard<'a> {
-    pub fn new() -> Self {
+    pub fn new(message: String, category: Category) -> Self {
         let mut s = Self::default();
-        s.status_bar.text = s.category.print_full();
+        s.category = category;
+        s.message = message;
+        s.refresh();
         s
     }
 
     fn refresh(&mut self) {
-        self.status_bar.text = self.category.print_full();
+        self.status_bar.text = format!("{}    {}", self.message, self.category.print_full());
     }
 }
 
@@ -54,6 +64,8 @@ fn split_area(area: Rect) -> (Rect, Rect, Rect) {
 }
 
 impl Tab for AddCard<'_> {
+    type AppData = CardCache;
+
     fn set_selection(&mut self, area: ratatui::prelude::Rect) {
         let (status, front, back) = split_area(area);
 
@@ -64,23 +76,19 @@ impl Tab for AddCard<'_> {
         self.view.areas.extend([front, back]);
     }
 
-    fn view(&mut self) -> &mut crate::ui_library::View {
+    fn view(&mut self) -> &mut View {
         &mut self.view
     }
 
-    fn widgets(&mut self) -> Vec<&mut dyn Widget> {
-        vec![
-            &mut self.front as &mut dyn crate::ui_library::Widget,
-            &mut self.back as &mut dyn crate::ui_library::Widget,
-            &mut self.status_bar as &mut dyn crate::ui_library::Widget,
-        ]
+    fn widgets(&mut self) -> Vec<&mut dyn Widget<AppData = Self::AppData>> {
+        vec![&mut self.front, &mut self.back, &mut self.status_bar]
     }
 
     fn title(&self) -> &str {
-        "add cards"
+        "new card"
     }
 
-    fn check_popup_value(&mut self) {
+    fn check_popup_value(&mut self, _cache: &mut CardCache) {
         let mut flag = false;
         if let Some(popup) = &self.choose_category {
             match &popup.popup_state {
@@ -101,8 +109,10 @@ impl Tab for AddCard<'_> {
         }
     }
 
-    fn pop_up(&mut self) -> Option<&mut dyn Tab> {
-        self.choose_category.as_mut().map(|c| c as &mut dyn Tab)
+    fn pop_up(&mut self) -> Option<&mut dyn Tab<AppData = CardCache>> {
+        self.choose_category
+            .as_mut()
+            .map(|c| c as &mut dyn Tab<AppData = CardCache>)
     }
 
     fn tab_keyhandler(&mut self, cache: &mut CardCache, key: KeyEvent) -> bool {
@@ -117,7 +127,7 @@ impl Tab for AddCard<'_> {
             self.choose_category = Some(CatChoice::new());
         }
 
-        if self.back.is_selected(&cursor) && key.code == KeyCode::Enter {
+        if self.view.is_selected && self.back.is_selected(&cursor) && key.code == KeyCode::Enter {
             let old_self = std::mem::take(self);
             self.category = old_self.category;
             self.refresh();
@@ -131,7 +141,8 @@ impl Tab for AddCard<'_> {
                 return false;
             };
 
-            card.save_new_card(&Category::root(), cache);
+            self.popstate = PopUpState::Resolve(card.save_new_card(&self.category, cache));
+
             return false;
         }
         true

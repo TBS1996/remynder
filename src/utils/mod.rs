@@ -10,7 +10,13 @@ use speki_backend::{cache::CardCache, Id};
 use tui_textarea::TextArea;
 use tui_tree_widget::{Tree, TreeItem, TreeState};
 
-use crate::ui_library::Widget;
+use mischef::Widget;
+
+mod text_input;
+pub use text_input::*;
+
+mod text_display;
+pub use text_display::*;
 
 fn card_dependencies_inner(card: Id, cache: &mut CardCache) -> TreeItem<'static, Id> {
     let binding = cache.get_ref(card);
@@ -77,55 +83,6 @@ impl<'a, T: Default + Eq + Clone + PartialEq + std::hash::Hash> StatefulTree<'a,
     }
 }
 
-#[derive(Default, Debug)]
-pub struct StatusBar {
-    pub text: String,
-    area: Rect,
-}
-
-impl Widget for StatusBar {
-    fn keyhandler(&mut self, _cache: &mut CardCache, _key: crossterm::event::KeyEvent) {}
-
-    fn render(&mut self, f: &mut Frame, _cache: &mut CardCache, area: ratatui::layout::Rect) {
-        f.render_widget(
-            Paragraph::new(self.text.as_str()).wrap(Wrap { trim: true }),
-            area,
-        );
-    }
-
-    fn area(&self) -> Rect {
-        self.area
-    }
-
-    fn set_area(&mut self, area: Rect) {
-        self.area = area;
-    }
-}
-
-#[derive(Default, Debug)]
-pub struct TextInput<'a> {
-    pub text: TextArea<'a>,
-    area: Rect,
-}
-
-impl Widget for TextInput<'_> {
-    fn keyhandler(&mut self, _cache: &mut CardCache, key: crossterm::event::KeyEvent) {
-        self.text.input(key);
-    }
-
-    fn render(&mut self, f: &mut Frame, _cache: &mut CardCache, area: ratatui::layout::Rect) {
-        f.render_widget(self.text.widget(), area);
-    }
-
-    fn area(&self) -> Rect {
-        self.area
-    }
-
-    fn set_area(&mut self, area: Rect) {
-        self.area = area;
-    }
-}
-
 #[derive(Debug)]
 pub struct TreeWidget<'a, T> {
     pub tree: StatefulTree<'a, T>,
@@ -169,6 +126,7 @@ impl<'a, T: Default + Eq + Clone + PartialEq + std::hash::Hash> TreeWidget<'a, T
 }
 
 impl<T: Default + Eq + Clone + PartialEq + std::hash::Hash> Widget for TreeWidget<'_, T> {
+    type AppData = CardCache;
     fn keyhandler(&mut self, _cache: &mut CardCache, key: crossterm::event::KeyEvent) {
         match key.code {
             KeyCode::Up => self.tree.up(),
@@ -267,6 +225,8 @@ impl<T> StatefulList<T> {
 }
 
 impl Widget for StatefulList<Id> {
+    type AppData = CardCache;
+
     fn keyhandler(&mut self, cache: &mut CardCache, key: crossterm::event::KeyEvent) {
         match key.code {
             crossterm::event::KeyCode::Up => self.previous(),

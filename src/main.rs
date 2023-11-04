@@ -1,126 +1,17 @@
 use std::ops::ControlFlow;
+use tabs::{addcards::CardAdder, *};
 
-use addcards::AddCard;
 use browse::Browser;
-use crossterm::event::{self, Event, KeyCode, KeyEvent};
-use ratatui::{prelude::*, widgets::*};
+use mischef::{App, Retning, Tab};
+use ratatui::prelude::*;
 use review::ReviewCard;
 use speki_backend::cache::CardCache;
-use tracing::instrument;
 use tracing_subscriber::{prelude::__tracing_subscriber_SubscriberExt, util::SubscriberInitExt};
-use ui_library::Tab;
 
-mod addcards;
-mod browse;
 mod choose_category;
-mod review;
-mod ui_library;
+mod popups;
+mod tabs;
 mod utils;
-
-type Term = ratatui::Terminal<Bakende>;
-type Bakende = ratatui::backend::CrosstermBackend<std::io::Stderr>;
-
-pub trait Page {
-    fn draw(&self, f: &mut Frame, area: Rect, cache: &mut CardCache);
-    fn handle_key(&mut self, key: KeyEvent, cache: &mut CardCache);
-}
-
-struct App {
-    cache: CardCache,
-    terminal: Term,
-    tab_idx: usize,
-    tabs: Vec<Box<dyn Tab>>,
-}
-
-impl std::fmt::Debug for App {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("App")
-            .field("cache", &"~")
-            .field("terminal", &self.terminal)
-            .field("tab_idx", &self.tab_idx)
-            .field("tabs", &"~")
-            .finish()
-    }
-}
-
-impl App {
-    fn new() -> Self {
-        let terminal = Terminal::new(CrosstermBackend::new(std::io::stderr())).unwrap();
-        let mut cache = CardCache::new();
-        let review = Box::new(ReviewCard::new(&mut cache));
-        let browser = Box::new(Browser::new(&mut cache));
-
-        let add_card = Box::new(AddCard::new());
-        let tabs: Vec<Box<dyn Tab>> = vec![review, add_card, browser];
-
-        Self {
-            terminal,
-            cache,
-            tabs,
-            tab_idx: 0,
-        }
-    }
-
-    #[instrument]
-    fn draw(&mut self) {
-        let idx = self.tab_idx;
-
-        self.terminal
-            .draw(|f| {
-                let (tab_area, remainder_area) = split_off(f.size(), 3, Retning::Up);
-
-                let tabs = Tabs::new(self.tabs.iter().map(|tab| tab.title()).collect())
-                    .block(Block::default().borders(Borders::ALL))
-                    .style(Style::default().white())
-                    .highlight_style(Style::default().light_red())
-                    .select(idx)
-                    .divider(symbols::DOT);
-
-                f.render_widget(tabs, tab_area);
-
-                self.tabs[self.tab_idx].entry_render(f, &mut self.cache, remainder_area);
-            })
-            .unwrap();
-    }
-
-    #[instrument]
-    fn handle_key(&mut self) -> ControlFlow<()> {
-        let key = get_event();
-
-        if let Event::Key(x) = key {
-            if x.code == KeyCode::Tab {
-                self.go_right()
-            } else if x.code == KeyCode::BackTab {
-                self.go_left()
-            };
-        }
-
-        self.tabs[self.tab_idx].entry_keyhandler(key, &mut self.cache)
-    }
-
-    fn go_right(&mut self) {
-        self.tab_idx = std::cmp::min(self.tab_idx + 1, self.tabs.len() - 1);
-    }
-
-    fn go_left(&mut self) {
-        if self.tab_idx != 0 {
-            self.tab_idx -= 1;
-        }
-    }
-}
-
-fn get_event() -> Event {
-    event::read().unwrap()
-}
-
-fn get_key_event() -> KeyEvent {
-    loop {
-        let key = event::read().unwrap();
-        if let event::Event::Key(c) = key {
-            return c;
-        }
-    }
-}
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     crossterm::terminal::enable_raw_mode()?;
@@ -138,7 +29,17 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .with(sentry::integrations::tracing::layer())
         .init();
 
-    let mut app = App::new();
+    let mut cache = CardCache::new();
+
+    let mut app = {
+        let review = ReviewCard::new(&mut cache);
+        let add_cards = CardAdder::new();
+        let browse = Browser::new(&mut cache);
+        let tabs: Vec<Box<dyn Tab<AppData = CardCache>>> =
+            vec![Box::new(review), Box::new(add_cards), Box::new(browse)];
+
+        App::new(cache, tabs)
+    };
 
     loop {
         app.draw();
@@ -153,32 +54,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     crossterm::terminal::disable_raw_mode()?;
 
     Ok(())
-}
-
-#[derive(Debug)]
-pub enum Retning {
-    Up,
-    Down,
-    Left,
-    Right,
-}
-
-impl TryFrom<KeyEvent> for Retning {
-    type Error = ();
-
-    fn try_from(value: KeyEvent) -> Result<Self, Self::Error> {
-        match value.code {
-            KeyCode::Left => Ok(Self::Left),
-            KeyCode::Right => Ok(Self::Right),
-            KeyCode::Up => Ok(Self::Up),
-            KeyCode::Down => Ok(Self::Down),
-            KeyCode::Char('k') => Ok(Self::Up),
-            KeyCode::Char('j') => Ok(Self::Down),
-            KeyCode::Char('h') => Ok(Self::Left),
-            KeyCode::Char('l') => Ok(Self::Right),
-            _ => Err(()),
-        }
-    }
 }
 
 pub fn split_off(area: Rect, length: u16, direction: Retning) -> (Rect, Rect) {
