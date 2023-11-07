@@ -1,1 +1,2 @@
-mod table_thing;
+pub mod dependencies;
+pub mod table_thing;

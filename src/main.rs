@@ -35,7 +35,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         let review = ReviewCard::new(&mut cache);
         let add_cards = CardAdder::new();
         let browse = Browser::new(&mut cache);
-        let tabs: Vec<Box<dyn Tab<AppData = CardCache>>> =
+        let tabs: Vec<Box<dyn Tab<AppState = CardCache>>> =
             vec![Box::new(review), Box::new(add_cards), Box::new(browse)];
 
         App::new(cache, tabs)

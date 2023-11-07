@@ -1,35 +1,32 @@
 use std::path::PathBuf;
 
 use crossterm::event::KeyCode;
-use mischef::{Tab, View, Widget};
+use mischef::{Tab, TabData, Widget};
 
 use speki_backend::{cache::CardCache, categories::Category};
 use tui_tree_widget::TreeItem;
 
 use crate::utils::TreeWidget;
 
-use super::PopUpState;
-
 #[derive(Debug)]
 pub struct CatChoice<'a> {
     tree: TreeWidget<'a, PathBuf>,
-    pub popup_state: PopUpState<Category>,
-    view: View,
+    tabdata: TabData<CardCache>,
 }
 
 impl Tab for CatChoice<'_> {
-    type AppData = CardCache;
+    type AppState = CardCache;
 
     fn set_selection(&mut self, area: ratatui::prelude::Rect) {
         self.tree.set_area(area);
-        self.view.areas.extend([area]);
+        self.tabdata.areas.extend([area]);
     }
 
-    fn view(&mut self) -> &mut View {
-        &mut self.view
+    fn tabdata(&mut self) -> &mut TabData<Self::AppState> {
+        &mut self.tabdata
     }
 
-    fn widgets(&mut self) -> Vec<&mut dyn Widget<AppData = Self::AppData>> {
+    fn widgets(&mut self) -> Vec<&mut dyn Widget<AppData = Self::AppState>> {
         vec![&mut self.tree]
     }
 
@@ -45,10 +42,10 @@ impl Tab for CatChoice<'_> {
         if key.code == KeyCode::Enter {
             if let Some(p) = self.tree.selected() {
                 let category = Category::from_dir_path(p.as_path());
-                self.popup_state = PopUpState::Resolve(category);
+                self.resolve_tab(Box::new(category));
             }
         } else if key.code == KeyCode::Esc {
-            self.popup_state = PopUpState::Exit;
+            self.exit_tab();
         }
 
         self.tree.keyhandler(cache, key);
@@ -60,16 +57,14 @@ impl CatChoice<'_> {
     pub fn new() -> Self {
         let b = build_tree_item(speki_backend::paths::get_cards_path());
         let tree = TreeWidget::new_with_items("choose category".into(), vec![b]);
-        let popup_state = PopUpState::Continue;
-        let view = View {
+        let view = TabData {
             is_selected: true,
             ..Default::default()
         };
 
         Self {
             tree,
-            popup_state,
-            view,
+            tabdata: view,
         }
     }
 }

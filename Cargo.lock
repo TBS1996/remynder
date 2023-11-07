@@ -762,9 +762,9 @@ dependencies = [
 
 [[package]]
 name = "mischef"
-version = "0.1.1"
+version = "0.1.12"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fb7ea7bce0bd62637aa46a2593ad9e36c17bc29fc1b8afe213c78f2435b1a4fe"
+checksum = "cac9bc4bc15dae29d82abd67456d4aed2d7ab61ebd5ad0ba380a343f48a5e8db"
 dependencies = [
  "crossterm",
  "ratatui",
@@ -1141,10 +1141,13 @@ version = "0.1.0"
 dependencies = [
  "crossterm",
  "mischef",
+ "proc-macro2",
+ "quote",
  "ratatui",
  "sentry",
  "serde_json",
  "speki-backend",
+ "syn 1.0.109",
  "tordir",
  "tracing",
  "tracing-subscriber",
@@ -1529,9 +1532,9 @@ dependencies = [
 
 [[package]]
 name = "speki-backend"
-version = "0.1.4"
+version = "0.1.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c32a7b639f9d6a3800c2706a75567bee82f829e56fa37494a86c3be2df8879d2"
+checksum = "2ecc3fd4992adb23ef27c3cd73443bc07e760c03f2de3f27ca2e62b5f798e7af"
 dependencies = [
  "cpython",
  "dirs",

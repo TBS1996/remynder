@@ -170,21 +170,25 @@ impl<T: Default + Eq + Clone + PartialEq + std::hash::Hash> Widget for TreeWidge
 }
 
 pub struct StatefulList<T> {
-    state: ListState,
-    items: Vec<T>,
+    pub state: ListState,
+    pub items: Vec<T>,
     area: Rect,
 }
 
 impl<T> StatefulList<T> {
     pub fn with_items(items: Vec<T>) -> StatefulList<T> {
+        let mut state = ListState::default();
+        if !items.is_empty() {
+            state.select(Some(0));
+        }
         StatefulList {
-            state: ListState::default(),
+            state,
             items,
             area: Rect::default(),
         }
     }
 
-    fn next(&mut self) {
+    pub fn next(&mut self) {
         let i = match self.state.selected() {
             Some(i) => {
                 if i >= self.items.len() - 1 {
@@ -198,7 +202,7 @@ impl<T> StatefulList<T> {
         self.state.select(Some(i));
     }
 
-    fn previous(&mut self) {
+    pub fn previous(&mut self) {
         let i = match self.state.selected() {
             Some(i) => {
                 if i == 0 {
@@ -210,6 +214,13 @@ impl<T> StatefulList<T> {
             None => 0,
         };
         self.state.select(Some(i));
+    }
+
+    pub fn selected_mut(&mut self) -> Option<&mut T> {
+        match self.state.selected() {
+            Some(c) => Some(&mut self.items[c]),
+            None => None,
+        }
     }
 
     pub fn selected(&self) -> Option<&T> {

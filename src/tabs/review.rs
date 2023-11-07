@@ -1,20 +1,20 @@
-use std::time::Duration;
+use std::{any::Any, time::Duration};
 
 use crossterm::event::KeyCode;
 use speki_backend::{
     cache::CardCache,
-    card::{Grade, IsSuspended, Review},
+    card::{Grade, IsSuspended, Review, SavedCard},
     filter::FilterUtil,
     Id,
 };
 
-use mischef::{Retning, Tab, View, Widget};
+use mischef::{Retning, Tab, TabData, Widget};
 
 use ratatui::prelude::*;
 
 use crate::{
     hsplit2,
-    popups::AddCard,
+    popups::{AddCard, FilterChoice},
     split3, split_off,
     utils::{card_dependencies, StatusBar, TreeWidget},
     vsplit2,
@@ -22,9 +22,12 @@ use crate::{
 
 use Constraint as Bound;
 
+use super::browse::Browser;
+
 pub enum PopUp<'a> {
     NewDependency(AddCard<'a>),
     NewDependent(AddCard<'a>),
+    ChooseFilter(FilterChoice<'a>),
 }
 
 pub struct ReviewCard<'a> {
@@ -38,8 +41,8 @@ pub struct ReviewCard<'a> {
     pub status: StatusBar,
     pub card_info: StatusBar,
     pub info: StatusBar,
-    pub view: View,
-    pub popup: Option<PopUp<'a>>,
+    pub tab_data: TabData<CardCache>,
+    pub popup_callback: CallBack,
 }
 
 impl std::fmt::Debug for ReviewCard<'_> {
@@ -67,35 +70,39 @@ fn confident_filter() -> FilterUtil {
     }
 }
 
+pub enum CallBack {
+    NewDependency,
+    NewDependent,
+    Filter,
+    OldDependency,
+    OldDependent,
+}
+
 impl ReviewCard<'_> {
     pub fn new(cache: &mut CardCache) -> Self {
-        let all_cards = cache.ids_as_vec();
-        let filter = confident_filter();
-        let mut filtered = filter.evaluate_cards(all_cards.clone(), cache);
-
-        filtered.retain(|card| {
-            let card = cache.get_ref(*card);
-            count_lapses(card.reviews()) < 4
-        });
-
-        let mut x = Self {
-            filtered,
+        let mut myself = Self {
+            filtered: vec![],
             completed: vec![],
-            filter,
+            filter: confident_filter(),
             show_back: false,
             dependencies: TreeWidget::new_with_items("Dependencies".into(), vec![]),
-            view: View::default(),
+            tab_data: TabData::default(),
             front: StatusBar::default(),
             back: StatusBar::default(),
             status: StatusBar::default(),
             card_info: StatusBar::default(),
             info: StatusBar::default(),
-            popup: None,
+            popup_callback: CallBack::Filter, // dummy
         };
 
-        x.refresh(cache);
+        myself.filtering(cache);
+        myself
+    }
 
-        x
+    fn filtering(&mut self, cache: &mut CardCache) {
+        let all_cards = cache.ids_as_vec();
+        self.filtered = self.filter.evaluate_cards(all_cards.clone(), cache);
+        self.refresh(cache);
     }
 
     fn current_card(&self) -> Option<Id> {
@@ -155,6 +162,44 @@ impl ReviewCard<'_> {
             None => false,
         }
     }
+
+    fn handle_filter(&mut self, cache: &mut CardCache, filter: Box<dyn Any>) {
+        let filter: FilterUtil = *filter.downcast().unwrap();
+        self.filter = filter;
+        self.filtering(cache);
+    }
+
+    fn handle_old_dependent(&mut self, cache: &mut CardCache, card: Box<dyn Any>) {
+        let id: Id = *card.downcast().unwrap();
+        let card = cache.get_owned(id);
+
+        if let Some(id) = self.current_card() {
+            cache.get_owned(id).set_dependent(card.id(), cache);
+        }
+    }
+
+    fn handle_old_dependency(&mut self, cache: &mut CardCache, card: Box<dyn Any>) {
+        let id: Id = *card.downcast().unwrap();
+        let card = cache.get_owned(id);
+
+        if let Some(id) = self.current_card() {
+            cache.get_owned(id).set_dependency(card.id(), cache);
+        }
+    }
+
+    fn handle_new_dependent(&mut self, cache: &mut CardCache, card: Box<dyn Any>) {
+        let card: SavedCard = *card.downcast().unwrap();
+        if let Some(id) = self.current_card() {
+            cache.get_owned(id).set_dependent(card.id(), cache);
+        }
+    }
+
+    fn handle_new_dependency(&mut self, cache: &mut CardCache, card: Box<dyn Any>) {
+        let card: SavedCard = *card.downcast().unwrap();
+        if let Some(id) = self.current_card() {
+            cache.get_owned(id).set_dependency(card.id(), cache);
+        }
+    }
 }
 
 fn count_lapses(reviews: &Vec<Review>) -> u32 {
@@ -186,7 +231,7 @@ fn card_info(card: Id, cache: &mut CardCache) -> String {
 }
 
 impl Tab for ReviewCard<'_> {
-    type AppData = CardCache;
+    type AppState = CardCache;
 
     fn set_selection(&mut self, area: Rect) {
         let (info_bar, area) = split_off(area, 1, Retning::Up);
@@ -209,49 +254,24 @@ impl Tab for ReviewCard<'_> {
         self.dependencies.set_area(dependency_area);
         self.info.set_area(info_bar);
 
-        self.view
+        self.tab_data
             .areas
             .extend([front, back, card_info_area, dependency_area, info_bar]);
     }
 
-    fn view(&mut self) -> &mut View {
-        &mut self.view
+    fn tabdata(&mut self) -> &mut TabData<Self::AppState> {
+        &mut self.tab_data
     }
 
-    fn pop_up(&mut self) -> Option<&mut dyn Tab<AppData = Self::AppData>> {
-        self.popup.as_mut().map(|p| match p {
-            PopUp::NewDependency(p) => p as &mut dyn Tab<AppData = Self::AppData>,
-            PopUp::NewDependent(p) => p as &mut dyn Tab<AppData = Self::AppData>,
-        })
-    }
-
-    fn check_popup_value(&mut self, cache: &mut CardCache) {
-        let mut flag = false;
-        match &self.popup {
-            Some(PopUp::NewDependency(c)) => {
-                if let Some(val) = c.popstate.value() {
-                    if let Some(current) = self.current_card() {
-                        let mut current_card = cache.get_owned(current);
-                        current_card.set_dependency(val.id(), cache);
-                    }
-                    flag = true;
-                }
-            }
-            Some(PopUp::NewDependent(c)) => {
-                if let Some(val) = c.popstate.value() {
-                    if let Some(current) = self.current_card() {
-                        let mut current_card = cache.get_owned(current);
-                        current_card.set_dependent(val.id(), cache);
-                    }
-                    flag = true;
-                }
-            }
-            None => return,
-        };
-        if flag {
-            self.popup = None;
-            self.refresh(cache);
+    fn handle_popup_value(&mut self, cache: &mut Self::AppState, value: Box<dyn Any>) {
+        match self.popup_callback {
+            CallBack::NewDependency => self.handle_new_dependency(cache, value),
+            CallBack::NewDependent => self.handle_new_dependent(cache, value),
+            CallBack::Filter => self.handle_filter(cache, value),
+            CallBack::OldDependency => self.handle_old_dependency(cache, value),
+            CallBack::OldDependent => self.handle_old_dependent(cache, value),
         }
+        self.refresh(cache);
     }
 
     fn tab_keyhandler(
@@ -274,21 +294,42 @@ impl Tab for ReviewCard<'_> {
                     self.refresh(cache);
                     return false;
                 }
+                'o' => {
+                    let p = cache.get_ref(self.current_card().unwrap()).as_path();
+                    std::process::Command::new("open")
+                        .arg(p.as_path())
+                        .status()
+                        .expect("Failed to open file");
+                }
                 's' => {
                     card.set_suspended(IsSuspended::True);
                     return false;
                 }
+                'f' => {
+                    self.set_popup(Box::new(FilterChoice::new()));
+                    self.popup_callback = CallBack::Filter;
+                }
                 'T' => {
-                    self.popup = Some(PopUp::NewDependent(AddCard::new(
-                        "Add new dependent".into(),
+                    self.set_popup(Box::new(AddCard::new(
+                        "Add new dependent",
                         card.category().to_owned(),
                     )));
+                    self.popup_callback = CallBack::NewDependent
                 }
                 'Y' => {
-                    self.popup = Some(PopUp::NewDependency(AddCard::new(
-                        "Add new dependency".into(),
+                    self.set_popup(Box::new(AddCard::new(
+                        "Add new dependency",
                         card.category().to_owned(),
                     )));
+                    self.popup_callback = CallBack::NewDependency
+                }
+                'y' => {
+                    self.set_popup(Box::new(Browser::new(cache)));
+                    self.popup_callback = CallBack::OldDependency;
+                }
+                't' => {
+                    self.set_popup(Box::new(Browser::new(cache)));
+                    self.popup_callback = CallBack::OldDependent;
                 }
                 _ => {
                     if let Ok(grade) = c.to_string().parse::<speki_backend::card::Grade>() {
@@ -304,7 +345,7 @@ impl Tab for ReviewCard<'_> {
         true
     }
 
-    fn widgets(&mut self) -> Vec<&mut dyn mischef::Widget<AppData = Self::AppData>> {
+    fn widgets(&mut self) -> Vec<&mut dyn mischef::Widget<AppData = Self::AppState>> {
         vec![
             &mut self.front,
             &mut self.back,
