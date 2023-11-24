@@ -1,38 +1,32 @@
-
 use ratatui::{
-    prelude::Rect,
+    style::Style,
     widgets::{Paragraph, Wrap},
     Frame,
 };
-use speki_backend::{cache::CardCache};
-
-
 
 use mischef::Widget;
 
+use crate::CardCache;
+
 #[derive(Default, Debug)]
-pub struct StatusBar {
+pub struct TextDisplay {
     pub text: String,
-    area: Rect,
 }
 
-impl Widget for StatusBar {
+impl Widget for TextDisplay {
     type AppData = CardCache;
 
     fn keyhandler(&mut self, _cache: &mut CardCache, _key: crossterm::event::KeyEvent) {}
 
     fn render(&mut self, f: &mut Frame, _cache: &mut CardCache, area: ratatui::layout::Rect) {
         f.render_widget(
-            Paragraph::new(self.text.as_str()).wrap(Wrap { trim: true }),
+            Paragraph::new(self.text.as_str())
+                .wrap(Wrap { trim: true })
+                .style(Style {
+                    //fg: Some(to_color(self.text.clone())),
+                    ..Default::default()
+                }),
             area,
         );
-    }
-
-    fn area(&self) -> Rect {
-        self.area
-    }
-
-    fn set_area(&mut self, area: Rect) {
-        self.area = area;
     }
 }

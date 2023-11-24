@@ -3,10 +3,10 @@ use std::path::PathBuf;
 use crossterm::event::KeyCode;
 use mischef::{Tab, TabData, Widget};
 
-use speki_backend::{cache::CardCache, categories::Category};
+use speki_backend::categories::Category;
 use tui_tree_widget::TreeItem;
 
-use crate::utils::TreeWidget;
+use crate::{utils::TreeWidget, CardCache};
 
 #[derive(Debug)]
 pub struct CatChoice<'a> {
@@ -17,17 +17,18 @@ pub struct CatChoice<'a> {
 impl Tab for CatChoice<'_> {
     type AppState = CardCache;
 
-    fn set_selection(&mut self, area: ratatui::prelude::Rect) {
-        self.tree.set_area(area);
-        self.tabdata.areas.extend([area]);
+    fn widgets(
+        &mut self,
+        area: ratatui::prelude::Rect,
+    ) -> Vec<(
+        &mut dyn Widget<AppData = Self::AppState>,
+        ratatui::prelude::Rect,
+    )> {
+        vec![(&mut self.tree, area)]
     }
 
     fn tabdata(&mut self) -> &mut TabData<Self::AppState> {
         &mut self.tabdata
-    }
-
-    fn widgets(&mut self) -> Vec<&mut dyn Widget<AppData = Self::AppState>> {
-        vec![&mut self.tree]
     }
 
     fn title(&self) -> &str {
@@ -36,7 +37,7 @@ impl Tab for CatChoice<'_> {
 
     fn tab_keyhandler(
         &mut self,
-        cache: &mut speki_backend::cache::CardCache,
+        cache: &mut Self::AppState,
         key: crossterm::event::KeyEvent,
     ) -> bool {
         if key.code == KeyCode::Enter {
@@ -50,6 +51,10 @@ impl Tab for CatChoice<'_> {
 
         self.tree.keyhandler(cache, key);
         false
+    }
+
+    fn tabdata_ref(&self) -> &TabData<Self::AppState> {
+        &self.tabdata
     }
 }
 

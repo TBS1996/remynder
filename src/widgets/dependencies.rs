@@ -1,12 +1,11 @@
 use mischef::Widget;
 use ratatui::prelude::Rect;
-use speki_backend::{cache::CardCache, Id};
+use speki_backend::Id;
 
-use crate::utils::TreeWidget;
+use crate::{utils::TreeWidget, CardCache};
 
 pub struct Dependencies<'a> {
     tree: TreeWidget<'a, Id>,
-    area: Rect,
 }
 
 impl Widget for Dependencies<'_> {
@@ -18,13 +17,5 @@ impl Widget for Dependencies<'_> {
 
     fn render(&mut self, f: &mut ratatui::Frame, app_data: &mut Self::AppData, area: Rect) {
         self.tree.render(f, app_data, area);
-    }
-
-    fn area(&self) -> Rect {
-        self.area
-    }
-
-    fn set_area(&mut self, area: Rect) {
-        self.area = area;
     }
 }

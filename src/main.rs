@@ -1,11 +1,12 @@
-use std::ops::ControlFlow;
+use std::sync::{Arc, Mutex};
+
 use tabs::{addcards::CardAdder, *};
 
 use browse::Browser;
 use mischef::{App, Retning, Tab};
 use ratatui::prelude::*;
 use review::ReviewCard;
-use speki_backend::cache::CardCache;
+use speki_backend::{cache::CardCache as CardCacheInner, card::SavedCard, Id};
 use tracing_subscriber::{prelude::__tracing_subscriber_SubscriberExt, util::SubscriberInitExt};
 
 mod popups;
@@ -13,10 +14,44 @@ mod tabs;
 mod utils;
 mod widgets;
 
-fn main() -> Result<(), Box<dyn std::error::Error>> {
-    crossterm::terminal::enable_raw_mode()?;
-    crossterm::execute!(std::io::stderr(), crossterm::terminal::EnterAlternateScreen)?;
+#[derive(Debug, Clone, Default)]
+pub struct CardCache {
+    pub inner: Arc<Mutex<CardCacheInner>>,
+}
 
+impl CardCache {
+    pub fn new() -> Self {
+        Self {
+            inner: Arc::new(Mutex::new(CardCacheInner::new())),
+        }
+    }
+
+    pub fn all_ids(&self) -> Vec<Id> {
+        self.inner.lock().unwrap().all_ids()
+    }
+
+    pub fn card_qty(&self) -> usize {
+        self.inner.lock().unwrap().card_qty()
+    }
+
+    pub fn try_get_ref(&self, id: Id) -> Option<Arc<SavedCard>> {
+        self.inner.lock().unwrap().try_get_ref(id)
+    }
+
+    pub fn get_ref(&self, id: Id) -> Arc<SavedCard> {
+        self.inner.lock().unwrap().get_ref(id)
+    }
+
+    pub fn get_owned(&self, id: Id) -> SavedCard {
+        self.inner.lock().unwrap().get_owned(id)
+    }
+
+    pub fn ids_as_vec(&self) -> Vec<Id> {
+        self.inner.lock().unwrap().ids_as_vec()
+    }
+}
+
+fn main() -> Result<(), Box<dyn std::error::Error>> {
     let _guard = sentry::init(("https://94a749520f9a39941b13f7559b94e9ea@o4504644012736512.ingest.sentry.io/4506144752205824", sentry::ClientOptions {
         release: sentry::release_name!(),
         // To set a uniform sample rate
@@ -29,29 +64,26 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .with(sentry::integrations::tracing::layer())
         .init();
 
-    let mut cache = CardCache::new();
+    std::env::set_var("RUST_BACKTRACE", "1");
 
     let mut app = {
+        let mut cache = CardCache::new();
+
         let review = ReviewCard::new(&mut cache);
         let add_cards = CardAdder::new();
-        let browse = Browser::new(&mut cache);
-        let tabs: Vec<Box<dyn Tab<AppState = CardCache>>> =
-            vec![Box::new(review), Box::new(add_cards), Box::new(browse)];
+        let browse = Browser::new(&mut cache, false);
+        let stats = Stats::new(&mut cache);
+        let tabs: Vec<Box<dyn Tab<AppState = CardCache>>> = vec![
+            Box::new(review),
+            Box::new(add_cards),
+            Box::new(browse),
+            Box::new(stats),
+        ];
 
         App::new(cache, tabs)
     };
 
-    loop {
-        app.draw();
-
-        match app.handle_key() {
-            ControlFlow::Continue(_) => continue,
-            ControlFlow::Break(_) => break,
-        }
-    }
-
-    crossterm::execute!(std::io::stderr(), crossterm::terminal::LeaveAlternateScreen)?;
-    crossterm::terminal::disable_raw_mode()?;
+    app.run();
 
     Ok(())
 }
@@ -107,7 +139,7 @@ fn _split2(area: Rect, dir: Direction, a: Constraint, b: Constraint) -> (Rect, R
     (chunks[0], chunks[1])
 }
 
-fn split3(
+fn _split3(
     area: Rect,
     dir: Direction,
     a: Constraint,
@@ -130,4 +162,54 @@ fn splitter(area: Rect, dir: Direction, constraints: Vec<Constraint>) -> Vec<Rec
 pub fn line_qty(text: &str, area: Rect) -> u16 {
     let char_qty = text.chars().count() as u16;
     char_qty / area.width + 2
+}
+
+/// Represents a bunch of items getting processed one by one.
+pub struct Pipeline<T> {
+    pre: Vec<T>,
+    current: Option<T>,
+    done: Vec<T>,
+}
+
+impl<T> Pipeline<T> {
+    pub fn new(items: Vec<T>) -> Self {
+        let qty = items.len();
+
+        let mut s = Self {
+            pre: items,
+            current: None,
+            done: Vec::with_capacity(qty),
+        };
+        s.next();
+
+        s
+    }
+
+    pub fn next(&mut self) {
+        if let Some(val) = self.current.take() {
+            self.done.push(val);
+        }
+
+        self.current = self.pre.pop();
+    }
+
+    pub fn current(&self) -> Option<&T> {
+        self.current.as_ref()
+    }
+
+    pub fn is_done(&self) -> bool {
+        self.pre.is_empty() && self.current.is_none()
+    }
+
+    pub fn finished_qty(&self) -> usize {
+        self.done.len()
+    }
+
+    pub fn unfinished_qty(&self) -> usize {
+        self.tot_qty() - self.finished_qty()
+    }
+
+    pub fn tot_qty(&self) -> usize {
+        self.pre.len() + if self.current.is_some() { 1 } else { 0 } + self.done.len()
+    }
 }

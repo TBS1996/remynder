@@ -6,7 +6,7 @@ use ratatui::{
     widgets::{List, ListItem, ListState},
     Frame,
 };
-use speki_backend::{cache::CardCache, Id};
+use speki_backend::Id;
 
 use tui_tree_widget::{Tree, TreeItem, TreeState};
 
@@ -17,6 +17,22 @@ pub use text_input::*;
 
 mod text_display;
 pub use text_display::*;
+
+use crate::CardCache;
+
+fn card_dependent_inner(card: Id, cache: &mut CardCache) -> TreeItem<'static, Id> {
+    let binding = cache.get_ref(card);
+    let dependencies = binding.dependent_ids();
+
+    let mut children = Vec::new();
+    for dependency in dependencies {
+        let child_item = card_dependent_inner(*dependency, cache);
+        children.push(child_item);
+    }
+
+    // Create a tree item for the current directory.
+    TreeItem::new(card, cache.get_ref(card).front_text().to_string(), children).unwrap()
+}
 
 fn card_dependencies_inner(card: Id, cache: &mut CardCache) -> TreeItem<'static, Id> {
     let binding = cache.get_ref(card);
@@ -30,6 +46,18 @@ fn card_dependencies_inner(card: Id, cache: &mut CardCache) -> TreeItem<'static,
 
     // Create a tree item for the current directory.
     TreeItem::new(card, cache.get_ref(card).front_text().to_string(), children).unwrap()
+}
+
+pub fn card_dependents(card: Id, cache: &mut CardCache) -> Vec<TreeItem<'static, Id>> {
+    let card = cache.get_ref(card);
+    let dependents = card.dependent_ids();
+    let mut vec = vec![];
+
+    for dependency in dependents {
+        vec.push(card_dependent_inner(*dependency, cache));
+    }
+
+    vec
 }
 
 pub fn card_dependencies(card: Id, cache: &mut CardCache) -> Vec<TreeItem<'static, Id>> {
@@ -86,7 +114,6 @@ impl<'a, T: Default + Eq + Clone + PartialEq + std::hash::Hash> StatefulTree<'a,
 #[derive(Debug)]
 pub struct TreeWidget<'a, T> {
     pub tree: StatefulTree<'a, T>,
-    pub area: Rect,
     pub title: String,
 }
 
@@ -115,11 +142,7 @@ impl<'a, T: Default + Eq + Clone + PartialEq + std::hash::Hash> TreeWidget<'a, T
     pub fn new_with_items(title: String, items: Vec<TreeItem<'a, T>>) -> Self {
         let tree = StatefulTree::with_items(items);
 
-        let mut x = Self {
-            tree,
-            area: Rect::default(),
-            title,
-        };
+        let mut x = Self { tree, title };
         x.open_all();
         x
     }
@@ -156,23 +179,15 @@ impl<T: Default + Eq + Clone + PartialEq + std::hash::Hash> Widget for TreeWidge
         );
     }
 
-    fn area(&self) -> Rect {
-        self.area
-    }
-
-    fn set_area(&mut self, area: Rect) {
-        self.area = area;
-    }
-
     fn title(&self) -> &str {
         self.title.as_str()
     }
 }
 
+#[derive(Default)]
 pub struct StatefulList<T> {
     pub state: ListState,
     pub items: Vec<T>,
-    area: Rect,
 }
 
 impl<T> StatefulList<T> {
@@ -181,11 +196,7 @@ impl<T> StatefulList<T> {
         if !items.is_empty() {
             state.select(Some(0));
         }
-        StatefulList {
-            state,
-            items,
-            area: Rect::default(),
-        }
+        StatefulList { state, items }
     }
 
     pub fn next(&mut self) {
@@ -249,7 +260,10 @@ impl Widget for StatefulList<Id> {
             .items
             .iter()
             .map(|i| {
-                let front = cache.get_ref(*i).front_text().to_owned();
+                let front = cache
+                    .try_get_ref(*i)
+                    .map(|i| i.front_text().to_owned())
+                    .unwrap_or("----".to_string());
                 let lines = vec![Line::from(front)];
                 ListItem::new(lines).style(Style::default().fg(Color::Black).bg(Color::White))
             })
@@ -267,13 +281,5 @@ impl Widget for StatefulList<Id> {
         // We can now render the item list
         let mut state = self.state.clone();
         f.render_stateful_widget(items, area, &mut state);
-    }
-
-    fn area(&self) -> Rect {
-        self.area
-    }
-
-    fn set_area(&mut self, area: Rect) {
-        self.area = area;
     }
 }

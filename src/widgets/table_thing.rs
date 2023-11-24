@@ -3,30 +3,18 @@ use std::{any::Any, marker::PhantomData};
 use crossterm::event::KeyCode;
 use mischef::Widget;
 use ratatui::{
-    prelude::Rect,
     style::{Color, Modifier, Style},
     text::Line,
     widgets::{List, ListItem},
 };
-use speki_backend::{cache::CardCache, filter::FilterUtil};
+use speki_backend::filter::FilterUtil;
 use tui_textarea::TextArea;
 
-use crate::{create_field, utils::StatefulList};
+use crate::{create_field, utils::StatefulList, CardCache};
 
 pub trait FieldsConstructible: Sized {
     fn from_fields(fields: &[Field]) -> Self;
     fn as_fields() -> Fields<'static>;
-}
-
-pub struct Fields<'a>(pub Vec<Field<'a>>);
-
-fn parse_value(fields: &[Field], name: &str) -> Box<dyn Any> {
-    fields
-        .iter()
-        .find(|field| field.name == name)
-        .unwrap()
-        .parse_value()
-        .unwrap()
 }
 
 impl FieldsConstructible for FilterUtil {
@@ -66,6 +54,17 @@ impl FieldsConstructible for FilterUtil {
     }
 }
 
+pub struct Fields<'a>(pub Vec<Field<'a>>);
+
+fn parse_value(fields: &[Field], name: &str) -> Box<dyn Any> {
+    fields
+        .iter()
+        .find(|field| field.name == name)
+        .unwrap()
+        .parse_value()
+        .unwrap()
+}
+
 type Evaluator = Box<dyn Fn(&str) -> Result<Box<dyn Any>, String>>;
 
 pub struct Field<'a> {
@@ -89,8 +88,7 @@ impl Field<'_> {
 }
 
 pub struct InputTable<'a, T: FieldsConstructible> {
-    inner: StatefulList<Field<'a>>,
-    area: Rect,
+    pub inner: StatefulList<Field<'a>>,
     _marker: PhantomData<T>, // Indicates association with the FieldConvertible type
 }
 
@@ -100,7 +98,6 @@ impl<'a, T: FieldsConstructible> InputTable<'a, T> {
 
         Self {
             inner: StatefulList::with_items(fields.0),
-            area: Rect::default(),
             _marker: PhantomData,
         }
     }
@@ -159,17 +156,34 @@ impl<T: FieldsConstructible> Widget for InputTable<'_, T> {
         let mut state = self.inner.state.clone();
         f.render_stateful_widget(items, area, &mut state);
     }
-
-    fn area(&self) -> ratatui::prelude::Rect {
-        self.area
-    }
-
-    fn set_area(&mut self, area: ratatui::prelude::Rect) {
-        self.area = area;
-    }
 }
 
 pub mod r#macro {
+
+    #[macro_export]
+    macro_rules! fields_constructible {
+    ($struct_name:ident, $($field_name:ident: $type:ty),*) => {
+        impl FieldsConstructible for $struct_name {
+            fn from_fields(fields: &[Field]) -> Self {
+                $struct_name {
+                    $(
+                        $field_name: parse_value(fields, stringify!($field_name))
+                            .downcast_ref::<$type>()
+                            .cloned()
+                            .unwrap_or_default()
+                    ),*
+                    ..Default::default()
+                }
+            }
+
+            fn as_fields() -> Fields<'static> {
+                Fields(vec![
+                    $(create_field!(stringify!($field_name), $type)),*
+                ])
+            }
+        }
+    };
+}
 
     #[macro_export]
     macro_rules! create_field {

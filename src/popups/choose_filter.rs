@@ -1,14 +1,23 @@
+use speki_backend::Id;
+
+use crate::{hsplit2, utils::StatefulList};
+
 use super::*;
 
 pub struct FilterChoice<'a> {
-    foo: InputTable<'a, FilterUtil>,
+    filter: InputTable<'a, FilterUtil>,
+    list: StatefulList<Id>,
     tabdata: TabData<CardCache>,
 }
 
 impl<'a> FilterChoice<'a> {
-    pub fn new() -> Self {
+    pub fn new(cache: &mut CardCache) -> Self {
+        let items = cache.all_ids();
+        let list = StatefulList::with_items(items);
+
         Self {
-            foo: InputTable::new(),
+            list,
+            filter: InputTable::new(),
             tabdata: TabData::default(),
         }
     }
@@ -17,32 +26,38 @@ impl<'a> FilterChoice<'a> {
 impl Tab for FilterChoice<'_> {
     type AppState = CardCache;
 
+    fn tabdata_ref(&self) -> &TabData<Self::AppState> {
+        &self.tabdata
+    }
+
     fn tab_keyhandler(
         &mut self,
         _cache: &mut Self::AppState,
         key: crossterm::event::KeyEvent,
     ) -> bool {
-        if self.foo.is_selected(&self.tabdata.cursor)
+        if self.is_selected(&self.filter)
             && self.tabdata.is_selected
             && key.code == KeyCode::Enter
-            && self.foo.is_valid()
+            && self.filter.is_valid()
         {
-            self.resolve_tab(Box::new(self.foo.extract_type()))
+            self.resolve_tab(Box::new(self.filter.extract_type()))
         }
         true
     }
 
-    fn set_selection(&mut self, area: ratatui::prelude::Rect) {
-        self.foo.set_area(area);
-        self.tabdata.areas.push(area);
+    fn widgets(
+        &mut self,
+        area: ratatui::prelude::Rect,
+    ) -> Vec<(
+        &mut dyn Widget<AppData = Self::AppState>,
+        ratatui::prelude::Rect,
+    )> {
+        let (list, filter) = hsplit2(area, 50, 50);
+        vec![(&mut self.filter, filter), (&mut self.list, list)]
     }
 
     fn tabdata(&mut self) -> &mut mischef::TabData<Self::AppState> {
         &mut self.tabdata
-    }
-
-    fn widgets(&mut self) -> Vec<&mut dyn mischef::Widget<AppData = Self::AppState>> {
-        vec![&mut self.foo]
     }
 
     fn title(&self) -> &str {

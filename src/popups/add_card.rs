@@ -1,44 +1,43 @@
 use crossterm::event::{KeyCode, KeyEvent};
 use ratatui::prelude::Rect;
-use speki_backend::{cache::CardCache, card::Card, categories::Category};
+use speki_backend::{card::Card, categories::Category, Id};
 
 use mischef::{Tab, TabData, Widget};
 
 use crate::{
     popups::CatChoice,
     split_off,
-    utils::{StatusBar, TextInput},
-    vsplit2,
+    utils::{TextDisplay, TextInput},
+    vsplit2, CardCache,
 };
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
+pub enum DependencyStatus {
+    Dependent(Id),
+    Dependency(Id),
+}
+
+#[derive(Debug, Default)]
 pub struct AddCard<'a> {
     front: TextInput<'a>,
     back: TextInput<'a>,
-    status_bar: StatusBar,
+    status_bar: TextDisplay,
     category: Category,
     tabdata: TabData<CardCache>,
+    dependency: Option<DependencyStatus>,
     message: String,
 }
 
-impl Default for AddCard<'_> {
-    fn default() -> Self {
-        Self {
-            front: Default::default(),
-            back: Default::default(),
-            category: Category::root(),
-            status_bar: StatusBar::default(),
-            tabdata: TabData::default(),
-            message: String::default(),
-        }
-    }
-}
-
 impl<'a> AddCard<'a> {
-    pub fn new(message: impl Into<String>, category: Category) -> Self {
+    pub fn new(
+        message: impl Into<String>,
+        category: Category,
+        dependency: Option<DependencyStatus>,
+    ) -> Self {
         let mut s = Self {
             category,
             message: message.into(),
+            dependency,
             ..Default::default()
         };
         s.refresh();
@@ -59,22 +58,30 @@ fn split_area(area: Rect) -> (Rect, Rect, Rect) {
 impl Tab for AddCard<'_> {
     type AppState = CardCache;
 
-    fn set_selection(&mut self, area: ratatui::prelude::Rect) {
+    fn widgets(&mut self, area: Rect) -> Vec<(&mut dyn Widget<AppData = Self::AppState>, Rect)> {
         let (status, front, back) = split_area(area);
 
-        self.front.set_area(front);
-        self.back.set_area(back);
-        self.status_bar.set_area(status);
+        vec![
+            (&mut self.status_bar, status),
+            (&mut self.front, front),
+            (&mut self.back, back),
+        ]
+    }
 
-        self.tabdata.areas.extend([front, back]);
+    fn pre_render_hook(&mut self, _app_data: &mut Self::AppState) {
+        if !self.tabdata().first_pass {
+            let id = self.front.id();
+            self.move_to_id(&id);
+            self.tabdata.is_selected = true;
+        }
     }
 
     fn tabdata(&mut self) -> &mut TabData<Self::AppState> {
         &mut self.tabdata
     }
 
-    fn widgets(&mut self) -> Vec<&mut dyn Widget<AppData = Self::AppState>> {
-        vec![&mut self.front, &mut self.back, &mut self.status_bar]
+    fn tabdata_ref(&self) -> &TabData<Self::AppState> {
+        &self.tabdata
     }
 
     fn title(&self) -> &str {
@@ -91,26 +98,23 @@ impl Tab for AddCard<'_> {
         self.refresh();
     }
 
-    fn tab_keyhandler(&mut self, cache: &mut CardCache, key: KeyEvent) -> bool {
-        let cursor = self.cursor();
-
-        if self.tabdata.is_selected && self.front.is_selected(&cursor) && key.code == KeyCode::Enter
-        {
-            self.tabdata.move_to_area(self.back.area());
+    fn tab_keyhandler_selected(
+        &mut self,
+        cache: &mut Self::AppState,
+        key: crossterm::event::KeyEvent,
+    ) -> bool {
+        if self.is_selected(&self.front) && key.code == KeyCode::Enter {
+            self.move_to_id(self.back.id().as_str());
             return false;
-        }
-
-        if !self.selected() && key.code == KeyCode::Char('c') {
-            self.set_popup(Box::new(CatChoice::new()));
-        }
-
-        if self.tabdata.is_selected && self.back.is_selected(&cursor) && key.code == KeyCode::Enter
+        } else if self.is_selected(&self.back) && key.code == KeyCode::Char('`')
+            || key.code == KeyCode::Enter
         {
+            let dependency = self.dependency.clone();
             let old_self = std::mem::take(self);
             self.category = old_self.category;
             self.refresh();
 
-            let card = Card::new_simple(
+            let mut card = Card::new_simple(
                 old_self.front.text.into_lines().join("\n"),
                 old_self.back.text.into_lines().join("\n"),
             );
@@ -119,10 +123,32 @@ impl Tab for AddCard<'_> {
                 return false;
             };
 
-            self.resolve_tab(Box::new(card.save_new_card(&self.category, cache)));
+            card.meta.finished = key.code == KeyCode::Enter;
+            let mut card = card.save_new_card(&self.category, &mut cache.inner.lock().unwrap());
+
+            match dependency {
+                Some(DependencyStatus::Dependency(id)) => {
+                    card.set_dependency(id, &mut cache.inner.lock().unwrap())
+                }
+                Some(DependencyStatus::Dependent(id)) => {
+                    card.set_dependent(id, &mut cache.inner.lock().unwrap())
+                }
+                None => None,
+            };
+
+            self.resolve_tab(Box::new(card));
 
             return false;
         }
+
+        true
+    }
+
+    fn tab_keyhandler_deselected(&mut self, _cache: &mut CardCache, key: KeyEvent) -> bool {
+        if key.code == KeyCode::Char('c') {
+            self.set_popup(Box::new(CatChoice::new()));
+        }
+
         true
     }
 }
@@ -132,13 +158,11 @@ mod tests {
     use super::*;
     #[test]
     fn test() {
-        let area = Rect {
+        let _area = Rect {
             x: 0,
             y: 0,
             width: 100,
             height: 100,
         };
-
-        dbg!(split_area(area));
     }
 }
