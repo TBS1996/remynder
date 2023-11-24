@@ -54,7 +54,7 @@ impl Tab for CardFinder {
         } else {
             self.index.input(&key, cache);
             let mut cards = self.index.current().clone();
-            cards.sort_by_key(|card| cache.get_ref(*card).dependent_ids().len());
+            cards.sort_by_key(|card| cache.dependents(*card));
             cards.reverse();
             self.cards
                 .state

@@ -124,16 +124,12 @@ impl Tab for AddCard<'_> {
             };
 
             card.meta.finished = key.code == KeyCode::Enter;
-            let mut card = card.save_new_card(&self.category, &mut cache.inner.lock().unwrap());
+            let card = card.save_new_card(&self.category, &mut cache.inner.lock().unwrap());
 
             match dependency {
-                Some(DependencyStatus::Dependency(id)) => {
-                    card.set_dependency(id, &mut cache.inner.lock().unwrap())
-                }
-                Some(DependencyStatus::Dependent(id)) => {
-                    card.set_dependent(id, &mut cache.inner.lock().unwrap())
-                }
-                None => None,
+                Some(DependencyStatus::Dependency(id)) => cache.set_dependency(card.id(), id),
+                Some(DependencyStatus::Dependent(id)) => cache.set_dependency(id, card.id()),
+                None => {}
             };
 
             self.resolve_tab(Box::new(card));

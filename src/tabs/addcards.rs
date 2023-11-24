@@ -14,18 +14,20 @@ pub struct CardAdder<'a> {
 }
 
 impl CardAdder<'_> {
-    pub fn new() -> Self {
+    pub fn new(cache: &mut CardCache) -> Self {
+        let category = cache
+            .all_ids()
+            .first()
+            .map(|id| cache.get_ref(*id).category().clone())
+            .unwrap_or_default();
+
         let mut s = Self {
             add_card: AddCard::new("create new card", Category::root(), None),
-            category: Category::root(),
+            category: category.clone(),
             tab_data: TabData::default(),
         };
 
-        s.set_popup(Box::new(AddCard::new(
-            "add new card",
-            Category::root(),
-            None,
-        )));
+        s.set_popup(Box::new(AddCard::new("add new card", category, None)));
         s
     }
 }

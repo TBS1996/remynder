@@ -47,12 +47,6 @@ pub enum CallBack {
     None,
 }
 
-enum Mode {
-    Weighted,
-    Conditional,
-    NewCards,
-}
-
 pub struct ReviewCard<'a> {
     pub cards: Pipeline<Id>,
     pub filter: FilterUtil,
@@ -121,7 +115,29 @@ impl ReviewCard<'_> {
         self.card_info = Default::default();
     }
 
+    fn review_unfinished(&mut self, cache: &mut CardCache) {
+        let cards = cache.all_ids();
+        let filter = FilterUtil {
+            suspended: Some(false),
+            finished: Some(false),
+            resolved: Some(true),
+            ..Default::default()
+        };
+        let mut filtered = filter.evaluate_cards(cards, &mut cache.inner.lock().unwrap());
+        filtered.sort_by_key(|card| {
+            cache
+                .inner
+                .lock()
+                .unwrap()
+                .recursive_dependents(*card)
+                .len()
+        });
+        filtered.reverse();
+        self.cards = Pipeline::new(filtered);
+    }
+
     fn refresh(&mut self, cache: &mut CardCache) {
+        self.clear();
         let Some(card_id) = self.cards.current() else {
             return;
         };
@@ -248,6 +264,7 @@ impl Tab for ReviewCard<'_> {
         key: crossterm::event::KeyEvent,
     ) -> bool {
         let Some(card) = self.cards.current().copied() else {
+            self.review_unfinished(cache);
             return true;
         };
 
@@ -296,6 +313,16 @@ impl Tab for ReviewCard<'_> {
         true
     }
 
+    fn after_keyhandler(&mut self, cache: &mut Self::AppState) {
+        if let Some(card) = self.cards.current() {
+            let mut card = cache.get_owned(*card);
+            card.set_front_text(&self.front.get_text());
+            if self.show_back {
+                card.set_back_text(&self.back.get_text());
+            }
+        }
+    }
+
     fn tab_keyhandler_selected(
         &mut self,
         cache: &mut Self::AppState,
@@ -317,7 +344,6 @@ impl Tab for ReviewCard<'_> {
             }
         }
 
-        //self.refresh(cache);
         true
     }
 
@@ -369,34 +395,28 @@ pub trait CardActionTrait: Tab<AppState = CardCache> {
                 self.set_popup(x);
             }
             CardAction::OldDependent => {
-                let the_cache = cache.clone();
+                let mut the_cache = cache.clone();
                 let card_id = card.id();
                 let f = move |x: &Box<dyn Any>| {
                     let new_card: Id = *x.downcast_ref().unwrap();
-                    let mut card = the_cache.get_owned(card_id);
-                    card.set_dependent(new_card, &mut the_cache.inner.lock().unwrap());
+                    the_cache.set_dependency(new_card, card_id);
                 };
 
-                let x = CardFinder::new(cache);
-
-                self.set_popup_with_modifier(Box::new(x), Box::new(f));
+                let popup = CardFinder::new(cache);
+                self.set_popup_with_modifier(Box::new(popup), Box::new(f));
             }
             CardAction::OldDependency => {
-                let the_cache = cache.clone();
+                let mut the_cache = cache.clone();
                 let card_id = card.id();
                 let f = move |x: &Box<dyn Any>| {
                     let new_card: Id = *x.downcast_ref().unwrap();
-                    let mut card = the_cache.get_owned(card_id);
-                    card.set_dependency(new_card, &mut the_cache.inner.lock().unwrap());
+                    the_cache.set_dependency(card_id, new_card);
                 };
 
-                let x = CardFinder::new(cache);
-
-                self.set_popup_with_modifier(Box::new(x), Box::new(f));
+                let popup = CardFinder::new(cache);
+                self.set_popup_with_modifier(Box::new(popup), Box::new(f));
             }
-            CardAction::Delete => {
-                card.delete(&mut cache.inner.lock().unwrap());
-            }
+            CardAction::Delete => cache.delete_card(card.id()),
             CardAction::NewRelated => {}
             CardAction::OldRelated => {}
             CardAction::ClearHistory => card.clear_history(),

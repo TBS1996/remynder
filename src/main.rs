@@ -1,4 +1,7 @@
-use std::sync::{Arc, Mutex};
+use std::{
+    collections::BTreeSet,
+    sync::{Arc, Mutex},
+};
 
 use tabs::{addcards::CardAdder, *};
 
@@ -49,6 +52,25 @@ impl CardCache {
     pub fn ids_as_vec(&self) -> Vec<Id> {
         self.inner.lock().unwrap().ids_as_vec()
     }
+
+    pub fn dependents(&mut self, id: Id) -> BTreeSet<Id> {
+        self.inner.lock().unwrap().dependents(id)
+    }
+
+    pub fn dependencies(&mut self, id: Id) -> BTreeSet<Id> {
+        self.inner.lock().unwrap().dependencies(id)
+    }
+
+    pub fn set_dependency(&mut self, dependent: Id, dependency: Id) {
+        self.inner
+            .lock()
+            .unwrap()
+            .set_dependency(dependent, dependency)
+    }
+
+    pub fn delete_card(&mut self, id: Id) {
+        self.inner.lock().unwrap().delete_card(id)
+    }
 }
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -70,7 +92,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         let mut cache = CardCache::new();
 
         let review = ReviewCard::new(&mut cache);
-        let add_cards = CardAdder::new();
+        let add_cards = CardAdder::new(&mut cache);
         let browse = Browser::new(&mut cache, false);
         let stats = Stats::new(&mut cache);
         let tabs: Vec<Box<dyn Tab<AppState = CardCache>>> = vec![

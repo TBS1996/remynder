@@ -21,12 +21,11 @@ pub use text_display::*;
 use crate::CardCache;
 
 fn card_dependent_inner(card: Id, cache: &mut CardCache) -> TreeItem<'static, Id> {
-    let binding = cache.get_ref(card);
-    let dependencies = binding.dependent_ids();
+    let dependents = cache.dependents(card);
 
     let mut children = Vec::new();
-    for dependency in dependencies {
-        let child_item = card_dependent_inner(*dependency, cache);
+    for dependent in dependents {
+        let child_item = card_dependent_inner(dependent, cache);
         children.push(child_item);
     }
 
@@ -35,12 +34,11 @@ fn card_dependent_inner(card: Id, cache: &mut CardCache) -> TreeItem<'static, Id
 }
 
 fn card_dependencies_inner(card: Id, cache: &mut CardCache) -> TreeItem<'static, Id> {
-    let binding = cache.get_ref(card);
-    let dependencies = binding.dependency_ids();
+    let dependents = cache.dependencies(card);
 
     let mut children = Vec::new();
-    for dependency in dependencies {
-        let child_item = card_dependencies_inner(*dependency, cache);
+    for dependent in dependents {
+        let child_item = card_dependencies_inner(dependent, cache);
         children.push(child_item);
     }
 
@@ -49,12 +47,11 @@ fn card_dependencies_inner(card: Id, cache: &mut CardCache) -> TreeItem<'static,
 }
 
 pub fn card_dependents(card: Id, cache: &mut CardCache) -> Vec<TreeItem<'static, Id>> {
-    let card = cache.get_ref(card);
-    let dependents = card.dependent_ids();
+    let dependents = cache.dependents(card);
     let mut vec = vec![];
 
-    for dependency in dependents {
-        vec.push(card_dependent_inner(*dependency, cache));
+    for dependent in dependents {
+        vec.push(card_dependent_inner(dependent, cache));
     }
 
     vec
