@@ -119,11 +119,11 @@ impl Tab for AddCard<'_> {
                 old_self.back.text.into_lines().join("\n"),
             );
 
-            if card.front.text.is_empty() {
+            if card.front.is_empty() {
                 return false;
             };
 
-            card.meta.finished = key.code == KeyCode::Enter;
+            card.finished = key.code == KeyCode::Enter;
             let card = card.save_new_card(&self.category, &mut cache.inner.lock().unwrap());
 
             match dependency {

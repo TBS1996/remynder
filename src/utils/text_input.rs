@@ -8,12 +8,11 @@ use tui_textarea::TextArea;
 
 use crate::CardCache;
 
-use super::TextDisplay;
-
 #[derive(Default, Debug)]
 pub struct TextInput<'a> {
     pub text: TextArea<'a>,
     is_selected: bool,
+    pub hide_text: bool,
 }
 
 impl TextInput<'_> {
@@ -22,8 +21,14 @@ impl TextInput<'_> {
         Self {
             text: TextArea::new(lines),
             is_selected: false,
+            hide_text: false,
         }
     }
+
+    pub fn clear(&mut self) {
+        self.text = TextArea::new(vec![]);
+    }
+
     pub fn get_text(&self) -> String {
         self.text.lines().join("\n")
     }
@@ -57,7 +62,11 @@ impl Widget for TextInput<'_> {
             *row = replace_or_append_char(row, '█', cursor.1);
         }
 
-        let text = lines.join("\n");
+        let mut text = lines.join("\n");
+
+        if self.hide_text {
+            text.clear();
+        }
 
         f.render_widget(
             Paragraph::new(text).wrap(Wrap { trim: true }).style(Style {

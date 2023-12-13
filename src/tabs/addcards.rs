@@ -1,5 +1,5 @@
 use ratatui::prelude::Rect;
-use speki_backend::{card::SavedCard, categories::Category};
+use speki_backend::{categories::Category, saved_card::SavedCard};
 
 use mischef::{PopUpState, Tab, TabData, Widget};
 

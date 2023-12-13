@@ -1,3 +1,5 @@
+use std::collections::BTreeMap;
+
 use mischef::{Tab, TabData};
 use speki_backend::common::duration_to_days;
 
@@ -15,9 +17,17 @@ impl Stats {
         let mut tot_str = 0.;
         let ids = cache.all_ids();
         let mut workload = 0.;
+        let mut map: BTreeMap<u32, Vec<f32>> = BTreeMap::default();
 
         for id in ids {
             let card = cache.get_ref(id);
+
+            for (recall_rate, outcome) in card.the_review().grade_and_chance() {
+                let recall_rate = (recall_rate * 100.) as u32;
+                let outcome = (outcome as u32) as f32;
+                map.entry(recall_rate).or_default().push(outcome);
+            }
+
             reviews.extend(card.reviews().clone());
             if let Some(stability) = card.stability() {
                 if !card.is_suspended()
@@ -40,11 +50,30 @@ impl Stats {
             }
         }
 
+        let mut new_map: BTreeMap<u32, f32> = BTreeMap::default();
+
+        for (k, v) in &map {
+            let len = v.len() as f32;
+            let sum: f32 = v.iter().sum();
+            let avg = sum / len;
+            new_map.insert(*k, avg);
+        }
+
         let reviews = reviews.len();
         let cards = cache.card_qty();
 
-        let text =
-            format!("amount of reviews: {reviews}\ndaily cards: {daily_cards}\ntot str: {tot_str}\nworkload: {workload}\ntot cards: {cards}");
+        let mut text =
+            format!("amount of reviews: {reviews}\ndaily cards: {daily_cards}\ntot str: {tot_str}\nworkload: {workload}\ntot cards: {cards}\n");
+
+        for (k, v) in &new_map {
+            if *k % 2 == 0 {
+                //continue;
+            }
+            //let s = format!(" {}->{:.0} ", k, v * 100.);
+            let s = format!(" {:.1} ", v * 100.);
+            text.push_str(&s);
+        }
+
         let info = TextDisplay { text };
 
         Self {

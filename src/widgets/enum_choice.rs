@@ -10,7 +10,7 @@ use ratatui::{
 };
 use strum::IntoEnumIterator;
 
-use crate::{tabs::review::CardAction, utils::StatefulList, CardCache};
+use crate::{utils::StatefulList, CardAction, CardCache};
 
 fn get_enum_options<T: IntoEnumIterator + std::fmt::Display>() -> Vec<String> {
     T::iter().map(|x| x.to_string()).collect()

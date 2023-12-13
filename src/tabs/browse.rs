@@ -1,5 +1,3 @@
-use std::str::FromStr;
-
 use crossterm::event::KeyCode;
 use mischef::{Tab, TabData, Widget};
 use rand::seq::SliceRandom;
@@ -7,16 +5,17 @@ use rand::thread_rng;
 use speki_backend::{filter::FilterUtil, Id};
 use strum_macros::{EnumIter, EnumString};
 
-use crate::popups::CardInspector;
+use crate::popups::{ActionPicker, CardInspector};
 use crate::utils::{
     card_dependencies, card_dependents, StatefulList, StatefulTree, TextDisplay, TreeWidget,
 };
 
+use crate::widgets::card_info;
 use crate::widgets::enum_choice::EnumChoice;
 use crate::widgets::table_thing::InputTable;
-use crate::{hsplit2, split_off, vsplit2, CardCache};
+use crate::{hsplit2, split_off, vsplit2, CardAction, CardActionTrait, CardCache};
 
-use super::review::{card_info, CardAction, CardActionTrait};
+use super::review::CurrentCard;
 
 #[derive(EnumString, EnumIter, strum_macros::Display)]
 pub enum Sorter {
@@ -40,6 +39,16 @@ pub struct Browser<'a> {
     sort_dir: bool,
     is_popup: bool,
     cache_len: usize,
+}
+
+impl CurrentCard for Browser<'_> {
+    fn selected_card(&self) -> Option<Id> {
+        self.card_list.selected().copied()
+    }
+
+    fn selected_cards(&self) -> Vec<Id> {
+        self.card_list.items.clone()
+    }
 }
 
 impl CardActionTrait for Browser<'_> {}
@@ -79,8 +88,8 @@ impl Tab for Browser<'_> {
     type AppState = CardCache;
 
     fn handle_popup_value(&mut self, cache: &mut Self::AppState, filter: Box<dyn std::any::Any>) {
-        if let Ok(filter) = filter.downcast() {
-            self.filter = *filter;
+        if let Option::<&FilterUtil>::Some(filter) = filter.downcast_ref() {
+            self.filter = filter.clone();
             self.update_list(cache);
         }
     }
@@ -194,14 +203,17 @@ impl Tab for Browser<'_> {
                 }
             }
 
-            if let KeyCode::Char(c) = key.code {
-                if let Ok(card_action) = CardAction::from_str(c.to_string().as_str()) {
-                    let Some(card) = self.card_list.selected().map(|id| cache.get_owned(*id))
-                    else {
-                        return false;
-                    };
+            if key.code == KeyCode::Char('c') {
+                let cards = self.selected_cards();
+                let x = ActionPicker::new(cards);
+                self.set_popup(Box::new(x));
+            }
 
-                    self.evaluate(card.id(), cache, card_action);
+            if let KeyCode::Char(c) = key.code {
+                if let Ok(action) = CardAction::from_char(c.to_string().as_str()) {
+                    if let Some(card) = self.selected_card() {
+                        self.evaluate(card, cache, action);
+                    }
                 }
             }
         }
@@ -229,7 +241,7 @@ impl Tab for Browser<'_> {
             self.dependents
                 .replace_items(card_dependents(card_id, cache));
 
-            self.info.text = card_info(card.id(), cache);
+            self.info.text = "".into();
         }
     }
 

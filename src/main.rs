@@ -1,15 +1,32 @@
 use std::{
+    any::Any,
     collections::BTreeSet,
+    fmt::Debug,
+    fs::{read_to_string, File},
+    io::BufReader,
+    path::{Path, PathBuf},
     sync::{Arc, Mutex},
+    time::Duration,
 };
 
+use popups::{AddCard, CardFinder, CatChoice, DependencyStatus};
+use rodio::{Decoder, OutputStream, Source};
+use sentry::types::Uuid;
+use strum_macros::{EnumIter, EnumString};
 use tabs::{addcards::CardAdder, *};
 
 use browse::Browser;
 use mischef::{App, Retning, Tab};
 use ratatui::prelude::*;
-use review::ReviewCard;
-use speki_backend::{cache::CardCache as CardCacheInner, card::SavedCard, Id};
+use review::ReviewMenu;
+use speki_backend::{
+    cache::{CardCache as CardCacheInner, IncRead},
+    card::{Card, IsSuspended},
+    categories::{Category, CategoryMeta},
+    common::current_time,
+    saved_card::SavedCard,
+    Id,
+};
 use tracing_subscriber::{prelude::__tracing_subscriber_SubscriberExt, util::SubscriberInitExt};
 
 mod popups;
@@ -71,6 +88,9 @@ impl CardCache {
     pub fn delete_card(&mut self, id: Id) {
         self.inner.lock().unwrap().delete_card(id)
     }
+    pub fn clear_dependencies(&mut self, id: Id) {
+        self.inner.lock().unwrap().clear_dependencies(id);
+    }
 }
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -90,16 +110,21 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let mut app = {
         let mut cache = CardCache::new();
+        //CardCacheInner::reset_serialize();
 
-        let review = ReviewCard::new(&mut cache);
+        let review = ReviewMenu::new();
         let add_cards = CardAdder::new(&mut cache);
         let browse = Browser::new(&mut cache, false);
         let stats = Stats::new(&mut cache);
+        let import = Importer::new();
+        let incread = IncrementalReading::new();
         let tabs: Vec<Box<dyn Tab<AppState = CardCache>>> = vec![
             Box::new(review),
             Box::new(add_cards),
             Box::new(browse),
+            Box::new(incread),
             Box::new(stats),
+            Box::new(import),
         ];
 
         App::new(cache, tabs)
@@ -187,24 +212,22 @@ pub fn line_qty(text: &str, area: Rect) -> u16 {
 }
 
 /// Represents a bunch of items getting processed one by one.
+#[derive(Debug)]
 pub struct Pipeline<T> {
     pre: Vec<T>,
     current: Option<T>,
     done: Vec<T>,
 }
 
-impl<T> Pipeline<T> {
+impl<T: Debug> Pipeline<T> {
     pub fn new(items: Vec<T>) -> Self {
         let qty = items.len();
 
-        let mut s = Self {
+        Self {
             pre: items,
             current: None,
             done: Vec::with_capacity(qty),
-        };
-        s.next();
-
-        s
+        }
     }
 
     pub fn next(&mut self) {
@@ -231,7 +254,201 @@ impl<T> Pipeline<T> {
         self.tot_qty() - self.finished_qty()
     }
 
+    pub fn progress(&self) -> (usize, usize) {
+        (self.finished_qty(), self.tot_qty())
+    }
+
     pub fn tot_qty(&self) -> usize {
         self.pre.len() + if self.current.is_some() { 1 } else { 0 } + self.done.len()
     }
+}
+
+pub fn open_text(p: &Path) {
+    std::process::Command::new("open")
+        .arg(p)
+        .status()
+        .expect("Failed to open file");
+}
+
+pub trait CardActionTrait: Tab<AppState = CardCache> {
+    fn evaluate_current(&mut self, cache: &mut CardCache, action: CardAction)
+    where
+        Self: CurrentCard,
+    {
+        for card in self.selected_cards() {
+            self.evaluate(card, cache, action);
+        }
+    }
+
+    fn evaluate(&mut self, card: Id, cache: &mut CardCache, action: CardAction) {
+        let mut card = cache.get_owned(card);
+        match action {
+            CardAction::ChangeCategory => {
+                let p = CatChoice::new();
+                let the_card = card.id();
+                let the_cache = cache.clone();
+                let f = move |x: &Box<dyn Any>| {
+                    let category: &Category = x.downcast_ref().unwrap();
+                    let card = the_cache.get_owned(the_card);
+                    card.move_card(category, &mut the_cache.inner.lock().unwrap());
+                };
+
+                self.set_popup_with_modifier(Box::new(p), Box::new(f));
+            }
+            CardAction::ReverseDependency => {
+                let inner: Card = card.clone().into();
+                let mut new_card = inner.clone();
+                new_card.id = Uuid::new_v4();
+                let mut new_card =
+                    new_card.save_new_card(card.category(), &mut cache.inner.lock().unwrap());
+                new_card.switch_sides();
+                cache.set_dependency(card.id(), new_card.id());
+            }
+            CardAction::Open => open_text(card.path().as_path()),
+            CardAction::ToggleSuspend => card.toggle_suspend(),
+            CardAction::ToggleFinish => {
+                let is_finished = card.is_finished();
+                card.set_finished(!is_finished);
+            }
+
+            CardAction::TempSuspend => {
+                let later = current_time() + Duration::from_secs(86400 * 14);
+                card.set_suspended(IsSuspended::TrueUntil(later));
+            }
+            CardAction::NewDependent => {
+                let x = Box::new(AddCard::new(
+                    "Add new dependent",
+                    card.category().to_owned(),
+                    DependencyStatus::Dependency(card.id()).into(),
+                ));
+
+                self.set_popup(x);
+            }
+            CardAction::NewDependency => {
+                let x = Box::new(AddCard::new(
+                    "Add new dependent",
+                    card.category().to_owned(),
+                    DependencyStatus::Dependent(card.id()).into(),
+                ));
+
+                self.set_popup(x);
+            }
+            CardAction::OldDependent => {
+                let mut the_cache = cache.clone();
+                let card_id = card.id();
+                let f = move |x: &Box<dyn Any>| {
+                    let new_card: Id = *x.downcast_ref().unwrap();
+                    the_cache.set_dependency(new_card, card_id);
+                };
+
+                let popup = CardFinder::new(cache);
+                self.set_popup_with_modifier(Box::new(popup), Box::new(f));
+            }
+            CardAction::OldDependency => {
+                let mut the_cache = cache.clone();
+                let card_id = card.id();
+                let f = move |x: &Box<dyn Any>| {
+                    let new_card: Id = *x.downcast_ref().unwrap();
+                    the_cache.set_dependency(card_id, new_card);
+                };
+
+                let popup = CardFinder::new(cache);
+                self.set_popup_with_modifier(Box::new(popup), Box::new(f));
+            }
+            CardAction::Delete => cache.delete_card(card.id()),
+            CardAction::NewRelated => {}
+            CardAction::OldRelated => {}
+            CardAction::ClearDependencies => cache.clear_dependencies(card.id()),
+            CardAction::ClearHistory => card.clear_history(),
+            CardAction::SwitchSides => card.switch_sides(),
+            CardAction::Suspend => card.set_suspended(IsSuspended::True),
+            CardAction::PlayFrontAudio => {
+                if let Some(path) = card.front_audio_path() {
+                    play_audio(path.clone()).ok();
+                }
+            }
+            CardAction::PlayBackAudio => {
+                if let Some(path) = card.back_audio_path() {
+                    play_audio(path.clone()).ok();
+                }
+            }
+            CardAction::SetPriority => {}
+            CardAction::DecrPriority => card.decr_priority(),
+            CardAction::IncrPriority => card.incr_priority(),
+            CardAction::ClearPriority => card.clear_priority(),
+            CardAction::Menu => {}
+        }
+    }
+}
+
+#[derive(EnumIter, strum_macros::Display, Clone, Copy, EnumString)]
+pub enum CardAction {
+    Open,
+    ToggleSuspend,
+    TempSuspend,
+    ToggleFinish,
+    NewDependent,
+    NewDependency,
+    NewRelated,
+    OldDependent,
+    OldDependency,
+    OldRelated,
+    Delete,
+    ClearHistory,
+    SwitchSides,
+    Suspend,
+    PlayFrontAudio,
+    PlayBackAudio,
+    Menu,
+    SetPriority,
+    IncrPriority,
+    DecrPriority,
+    ClearPriority,
+    ReverseDependency,
+    ClearDependencies,
+    ChangeCategory,
+}
+
+impl CardAction {
+    pub fn from_char(s: &str) -> Result<Self, ()> {
+        match s {
+            "o" => Ok(Self::Open),
+            "s" => Ok(Self::ToggleSuspend),
+            "S" => Ok(Self::TempSuspend),
+            "y" => Ok(Self::OldDependency),
+            "t" => Ok(Self::OldDependent),
+            "Y" => Ok(Self::NewDependency),
+            "T" => Ok(Self::NewDependent),
+            "D" => Ok(Self::Delete),
+            "f" => Ok(Self::ToggleFinish),
+            "r" => Ok(Self::OldRelated),
+            "R" => Ok(Self::NewRelated),
+            // "c" => Ok(Self::Menu),
+            "p" => Ok(Self::DecrPriority),
+            "P" => Ok(Self::IncrPriority),
+            "z" => Ok(Self::ChangeCategory),
+            _ => Err(()),
+        }
+    }
+}
+
+pub fn play_audio(file_path: PathBuf) -> Result<(), Box<dyn std::error::Error>> {
+    std::thread::spawn(move || {
+        let (_stream, stream_handle) = OutputStream::try_default().unwrap();
+        let Ok(file) = File::open(&file_path) else {
+            dbg!("file path not found:", file_path.display());
+            return;
+        };
+
+        let source = Decoder::new(BufReader::new(file)).unwrap();
+
+        // Play audio on a separate thread
+        stream_handle.play_raw(source.convert_samples()).unwrap();
+
+        // You might want to handle how long to keep this thread alive,
+        // or how to stop playback. This sleep is just a placeholder.
+        std::thread::sleep(std::time::Duration::from_secs(10));
+    });
+
+    Ok(())
 }

@@ -3,6 +3,7 @@ use ratatui::style::Color;
 pub mod card_info;
 pub mod dependencies;
 pub mod enum_choice;
+pub mod file_finder;
 pub mod table_thing;
 
 pub fn _to_color(value: String) -> Color {

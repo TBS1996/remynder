@@ -13,6 +13,12 @@ pub struct TextDisplay {
     pub text: String,
 }
 
+impl TextDisplay {
+    pub fn new(s: String) -> Self {
+        Self { text: s }
+    }
+}
+
 impl Widget for TextDisplay {
     type AppData = CardCache;
 

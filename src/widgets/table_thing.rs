@@ -7,7 +7,7 @@ use ratatui::{
     text::Line,
     widgets::{List, ListItem},
 };
-use speki_backend::filter::FilterUtil;
+use speki_backend::{categories::Category, filter::FilterUtil};
 use tui_textarea::TextArea;
 
 use crate::{create_field, utils::StatefulList, CardCache};
@@ -32,6 +32,9 @@ impl FieldsConstructible for FilterUtil {
             min_stability: *parse_value(fields, "min_stability").downcast().unwrap(),
             max_recall_rate: *parse_value(fields, "max_recall_rate").downcast().unwrap(),
             min_recall_rate: *parse_value(fields, "min_recall_rate").downcast().unwrap(),
+            allowed_categories: *parse_value(fields, "allowed_categories")
+                .downcast()
+                .unwrap(),
             ..Default::default()
         }
     }
@@ -50,6 +53,7 @@ impl FieldsConstructible for FilterUtil {
             create_field!("min_stability", DurationDays),
             create_field!("max_recall_rate", Option<f32>),
             create_field!("min_recall_rate", Option<f32>),
+            create_field!("allowed_categories", CategoryThing),
         ])
     }
 }
@@ -212,19 +216,18 @@ pub mod r#macro {
             }
         }};
 
-        ($name:expr, Option<$type:ty>) => {{
+        ($name:expr, CategoryThing) => {{
             Field {
                 name: $name.to_string(),
                 eval: Box::new(|input: &str| -> Result<Box<dyn Any>, String> {
                     if input.trim().is_empty() {
-                        Ok(Box::new(None::<$type>))
+                        Ok(Box::<Vec<Category>>::default())
                     } else {
                         Ok(input
                             .trim()
-                            .parse::<$type>()
-                            .map(Some)
-                            .map(Box::new)
-                            .map_err(|e| e.to_string())?)
+                            .parse::<Category>()
+                            .map_err(|e| e.to_string())
+                            .and_then(|x| Ok(Box::new(vec![x])))?)
                     }
                 }),
                 value: TextArea::default(),
@@ -243,6 +246,25 @@ pub mod r#macro {
                         .map(str::parse)
                         .collect();
                     Ok(result.map(Box::new).map_err(|e| e.to_string())?)
+                }),
+                value: TextArea::default(),
+            }
+        }};
+
+        ($name:expr, Option<$type:ty>) => {{
+            Field {
+                name: $name.to_string(),
+                eval: Box::new(|input: &str| -> Result<Box<dyn Any>, String> {
+                    if input.trim().is_empty() {
+                        Ok(Box::new(None::<$type>))
+                    } else {
+                        Ok(input
+                            .trim()
+                            .parse::<$type>()
+                            .map(Some)
+                            .map(Box::new)
+                            .map_err(|e| e.to_string())?)
+                    }
                 }),
                 value: TextArea::default(),
             }

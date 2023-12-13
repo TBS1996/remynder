@@ -1,3 +1,5 @@
+use std::{io::Read, path::Path};
+
 use crossterm::event::KeyCode;
 use ratatui::{
     prelude::Rect,
@@ -123,6 +125,10 @@ impl<'a, T: Default + Eq + Clone + PartialEq + std::hash::Hash> TreeWidget<'a, T
 
     pub fn selected(&self) -> Option<T> {
         self.tree.state.selected().last().cloned()
+    }
+
+    pub fn clear(&mut self) {
+        self.tree = StatefulTree::with_items(vec![]);
     }
 
     fn open_all(&mut self) {
@@ -278,5 +284,23 @@ impl Widget for StatefulList<Id> {
         // We can now render the item list
         let mut state = self.state.clone();
         f.render_stateful_widget(items, area, &mut state);
+    }
+}
+
+pub fn _read_text_file<P: AsRef<Path>>(path: P) -> Option<String> {
+    let path = path.as_ref();
+    if !path.is_file() {
+        return None;
+    }
+
+    let mut file = match std::fs::File::open(path) {
+        Ok(file) => file,
+        Err(_) => return None,
+    };
+
+    let mut contents = String::new();
+    match file.read_to_string(&mut contents) {
+        Ok(_) => Some(contents),
+        Err(_) => None,
     }
 }
