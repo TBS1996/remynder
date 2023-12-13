@@ -8,7 +8,7 @@ use crate::{
     popups::CatChoice,
     split_off,
     utils::{TextDisplay, TextInput},
-    vsplit2, CardCache,
+    vsplit2, CardCache, MyTabData, ReturnType,
 };
 
 #[derive(Clone, Debug)]
@@ -23,7 +23,7 @@ pub struct AddCard<'a> {
     back: TextInput<'a>,
     status_bar: TextDisplay,
     category: Category,
-    tabdata: TabData<CardCache>,
+    tabdata: MyTabData,
     dependency: Option<DependencyStatus>,
     message: String,
 }
@@ -57,6 +57,7 @@ fn split_area(area: Rect) -> (Rect, Rect, Rect) {
 
 impl Tab for AddCard<'_> {
     type AppState = CardCache;
+    type ReturnType = ReturnType;
 
     fn widgets(&mut self, area: Rect) -> Vec<(&mut dyn Widget<AppData = Self::AppState>, Rect)> {
         let (status, front, back) = split_area(area);
@@ -76,11 +77,11 @@ impl Tab for AddCard<'_> {
         }
     }
 
-    fn tabdata(&mut self) -> &mut TabData<Self::AppState> {
+    fn tabdata(&mut self) -> &mut TabData<Self::AppState, Self::ReturnType> {
         &mut self.tabdata
     }
 
-    fn tabdata_ref(&self) -> &TabData<Self::AppState> {
+    fn tabdata_ref(&self) -> &TabData<Self::AppState, Self::ReturnType> {
         &self.tabdata
     }
 
@@ -88,13 +89,10 @@ impl Tab for AddCard<'_> {
         "new card"
     }
 
-    fn handle_popup_value(
-        &mut self,
-        _app_data: &mut Self::AppState,
-        value: Box<dyn std::any::Any>,
-    ) {
-        let category = value.downcast::<Category>().unwrap();
-        self.category = *category;
+    fn handle_popup_value(&mut self, _app_data: &mut Self::AppState, value: ReturnType) {
+        if let ReturnType::Category(category) = value {
+            self.category = category;
+        }
         self.refresh();
     }
 
@@ -132,7 +130,7 @@ impl Tab for AddCard<'_> {
                 None => {}
             };
 
-            self.resolve_tab(Box::new(card));
+            self.resolve_tab(ReturnType::SavedCard(card));
 
             return false;
         }

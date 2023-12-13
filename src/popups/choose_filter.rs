@@ -1,13 +1,13 @@
 use speki_backend::Id;
 
-use crate::{hsplit2, utils::StatefulList};
+use crate::{hsplit2, utils::StatefulList, MyTabData, ReturnType};
 
 use super::*;
 
 pub struct FilterChoice<'a> {
     filter: InputTable<'a, FilterUtil>,
     list: StatefulList<Id>,
-    tabdata: TabData<CardCache>,
+    tabdata: MyTabData,
 }
 
 impl<'a> FilterChoice<'a> {
@@ -25,8 +25,9 @@ impl<'a> FilterChoice<'a> {
 
 impl Tab for FilterChoice<'_> {
     type AppState = CardCache;
+    type ReturnType = ReturnType;
 
-    fn tabdata_ref(&self) -> &TabData<Self::AppState> {
+    fn tabdata_ref(&self) -> &TabData<Self::AppState, Self::ReturnType> {
         &self.tabdata
     }
 
@@ -40,7 +41,7 @@ impl Tab for FilterChoice<'_> {
             && key.code == KeyCode::Enter
             && self.filter.is_valid()
         {
-            self.resolve_tab(Box::new(self.filter.extract_type()))
+            self.resolve_tab(ReturnType::Filter(self.filter.extract_type()))
         }
         true
     }
@@ -56,7 +57,7 @@ impl Tab for FilterChoice<'_> {
         vec![(&mut self.filter, filter), (&mut self.list, list)]
     }
 
-    fn tabdata(&mut self) -> &mut mischef::TabData<Self::AppState> {
+    fn tabdata(&mut self) -> &mut mischef::TabData<Self::AppState, Self::ReturnType> {
         &mut self.tabdata
     }
 

@@ -49,7 +49,7 @@ impl Widget for TextInput<'_> {
         area: ratatui::prelude::Rect,
     ) {
         let rect = self.draw_titled_border(f, is_selected, cursor, area);
-        self.is_selected = is_selected && TabData::<()>::isitselected(area, cursor);
+        self.is_selected = is_selected && TabData::<(), ()>::isitselected(area, cursor);
         self.render(f, app_data, rect);
     }
 

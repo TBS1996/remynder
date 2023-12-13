@@ -2,6 +2,7 @@ use crossterm::event::KeyCode;
 use mischef::{Tab, TabData, Widget};
 use rand::seq::SliceRandom;
 use rand::thread_rng;
+use speki_backend::card::ReviewType;
 use speki_backend::{filter::FilterUtil, Id};
 use strum_macros::{EnumIter, EnumString};
 
@@ -13,7 +14,7 @@ use crate::utils::{
 use crate::widgets::card_info;
 use crate::widgets::enum_choice::EnumChoice;
 use crate::widgets::table_thing::InputTable;
-use crate::{hsplit2, split_off, vsplit2, CardAction, CardActionTrait, CardCache};
+use crate::{hsplit2, split_off, vsplit2, CardAction, CardActionTrait, CardCache, ReturnType};
 
 use super::review::CurrentCard;
 
@@ -34,7 +35,7 @@ pub struct Browser<'a> {
     dependencies: TreeWidget<'a, Id>,
     dependents: TreeWidget<'a, Id>,
     filter_input: InputTable<'a, FilterUtil>,
-    tab_data: TabData<CardCache>,
+    tab_data: TabData<CardCache, ReturnType>,
     sort_choice: EnumChoice<Sorter>,
     sort_dir: bool,
     is_popup: bool,
@@ -86,9 +87,10 @@ impl Browser<'_> {
 
 impl Tab for Browser<'_> {
     type AppState = CardCache;
+    type ReturnType = ReturnType;
 
-    fn handle_popup_value(&mut self, cache: &mut Self::AppState, filter: Box<dyn std::any::Any>) {
-        if let Option::<&FilterUtil>::Some(filter) = filter.downcast_ref() {
+    fn handle_popup_value(&mut self, cache: &mut Self::AppState, filter: ReturnType) {
+        if let ReturnType::Filter(filter) = filter {
             self.filter = filter.clone();
             self.update_list(cache);
         }
@@ -195,7 +197,7 @@ impl Tab for Browser<'_> {
                 let selected = self.card_list.selected();
                 if let Some(selected) = selected {
                     if self.is_popup {
-                        self.resolve_tab(Box::new(*selected));
+                        self.resolve_tab(ReturnType::Card(*selected));
                     } else {
                         let card_inspector = CardInspector::new(*selected, cache);
                         self.set_popup(Box::new(card_inspector));
@@ -245,11 +247,11 @@ impl Tab for Browser<'_> {
         }
     }
 
-    fn tabdata(&mut self) -> &mut TabData<Self::AppState> {
+    fn tabdata(&mut self) -> &mut TabData<Self::AppState, Self::ReturnType> {
         &mut self.tab_data
     }
 
-    fn tabdata_ref(&self) -> &TabData<Self::AppState> {
+    fn tabdata_ref(&self) -> &TabData<Self::AppState, Self::ReturnType> {
         &self.tab_data
     }
 }

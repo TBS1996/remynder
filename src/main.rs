@@ -1,6 +1,7 @@
 use std::{
     any::Any,
     collections::BTreeSet,
+    default,
     fmt::Debug,
     fs::{read_to_string, File},
     io::BufReader,
@@ -9,6 +10,7 @@ use std::{
     time::Duration,
 };
 
+use derive_more::Unwrap;
 use popups::{AddCard, CardFinder, CatChoice, DependencyStatus};
 use rodio::{Decoder, OutputStream, Source};
 use sentry::types::Uuid;
@@ -16,7 +18,7 @@ use strum_macros::{EnumIter, EnumString};
 use tabs::{addcards::CardAdder, *};
 
 use browse::Browser;
-use mischef::{App, Retning, Tab};
+use mischef::{App, Retning, Tab, TabData};
 use ratatui::prelude::*;
 use review::ReviewMenu;
 use speki_backend::{
@@ -24,6 +26,7 @@ use speki_backend::{
     card::{Card, IsSuspended},
     categories::{Category, CategoryMeta},
     common::current_time,
+    filter::FilterUtil,
     saved_card::SavedCard,
     Id,
 };
@@ -37,6 +40,20 @@ mod widgets;
 #[derive(Debug, Clone, Default)]
 pub struct CardCache {
     pub inner: Arc<Mutex<CardCacheInner>>,
+}
+
+pub type MyTabData = TabData<CardCache, ReturnType>;
+pub type MyTab = dyn Tab<AppState = CardCache, ReturnType = ReturnType>;
+
+/// The value that each popup can return.
+#[derive(Unwrap, Default, Clone)]
+pub enum ReturnType {
+    Filter(FilterUtil),
+    Card(Id),
+    SavedCard(SavedCard),
+    Category(Category),
+    #[default]
+    NoOp,
 }
 
 impl CardCache {
@@ -118,7 +135,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         let stats = Stats::new(&mut cache);
         let import = Importer::new();
         let incread = IncrementalReading::new();
-        let tabs: Vec<Box<dyn Tab<AppState = CardCache>>> = vec![
+        let tabs: Vec<Box<MyTab>> = vec![
             Box::new(review),
             Box::new(add_cards),
             Box::new(browse),
@@ -270,7 +287,7 @@ pub fn open_text(p: &Path) {
         .expect("Failed to open file");
 }
 
-pub trait CardActionTrait: Tab<AppState = CardCache> {
+pub trait CardActionTrait: Tab<AppState = CardCache, ReturnType = ReturnType> {
     fn evaluate_current(&mut self, cache: &mut CardCache, action: CardAction)
     where
         Self: CurrentCard,
@@ -287,10 +304,10 @@ pub trait CardActionTrait: Tab<AppState = CardCache> {
                 let p = CatChoice::new();
                 let the_card = card.id();
                 let the_cache = cache.clone();
-                let f = move |x: &Box<dyn Any>| {
-                    let category: &Category = x.downcast_ref().unwrap();
+                let f = move |x: &ReturnType| {
+                    let category = x.clone().unwrap_category();
                     let card = the_cache.get_owned(the_card);
-                    card.move_card(category, &mut the_cache.inner.lock().unwrap());
+                    card.move_card(&category, &mut the_cache.inner.lock().unwrap());
                 };
 
                 self.set_popup_with_modifier(Box::new(p), Box::new(f));
@@ -336,8 +353,8 @@ pub trait CardActionTrait: Tab<AppState = CardCache> {
             CardAction::OldDependent => {
                 let mut the_cache = cache.clone();
                 let card_id = card.id();
-                let f = move |x: &Box<dyn Any>| {
-                    let new_card: Id = *x.downcast_ref().unwrap();
+                let f = move |x: &ReturnType| {
+                    let new_card = x.clone().unwrap_card();
                     the_cache.set_dependency(new_card, card_id);
                 };
 
@@ -347,8 +364,8 @@ pub trait CardActionTrait: Tab<AppState = CardCache> {
             CardAction::OldDependency => {
                 let mut the_cache = cache.clone();
                 let card_id = card.id();
-                let f = move |x: &Box<dyn Any>| {
-                    let new_card: Id = *x.downcast_ref().unwrap();
+                let f = move |x: &ReturnType| {
+                    let new_card = x.clone().unwrap_card();
                     the_cache.set_dependency(card_id, new_card);
                 };
 

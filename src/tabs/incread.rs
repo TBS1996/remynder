@@ -5,7 +5,7 @@ use speki_backend::{cache::IncRead, card::Card};
 use crate::{
     hsplit2, open_text, split_off,
     utils::{TextDisplay, TextInput},
-    vsplit2, CardCache,
+    vsplit2, CardCache, ReturnType,
 };
 
 pub struct IncrementalReading<'a> {
@@ -14,7 +14,7 @@ pub struct IncrementalReading<'a> {
     info: TextDisplay,
     front: TextInput<'a>,
     back: TextInput<'a>,
-    tab_data: TabData<CardCache>,
+    tab_data: TabData<CardCache, ReturnType>,
     idx: usize,
 }
 
@@ -91,6 +91,7 @@ impl IncrementalReading<'_> {
 
 impl Tab for IncrementalReading<'_> {
     type AppState = CardCache;
+    type ReturnType = ReturnType;
 
     fn tab_keyhandler_deselected(
         &mut self,
@@ -189,11 +190,11 @@ impl Tab for IncrementalReading<'_> {
         ]
     }
 
-    fn tabdata(&mut self) -> &mut TabData<Self::AppState> {
+    fn tabdata(&mut self) -> &mut TabData<Self::AppState, Self::ReturnType> {
         &mut self.tab_data
     }
 
-    fn tabdata_ref(&self) -> &TabData<Self::AppState> {
+    fn tabdata_ref(&self) -> &TabData<Self::AppState, Self::ReturnType> {
         &self.tab_data
     }
 

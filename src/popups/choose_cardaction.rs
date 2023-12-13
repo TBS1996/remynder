@@ -2,12 +2,14 @@ use crossterm::event::KeyCode;
 use mischef::{Tab, TabData};
 use speki_backend::Id;
 
-use crate::{widgets::enum_choice::EnumChoice, CardAction, CardActionTrait, CardCache};
+use crate::{
+    widgets::enum_choice::EnumChoice, CardAction, CardActionTrait, CardCache, MyTabData, ReturnType,
+};
 
 pub struct ActionPicker {
     cards: Vec<Id>,
     choice: EnumChoice<CardAction>,
-    tab_data: TabData<CardCache>,
+    tab_data: MyTabData,
 }
 
 impl CardActionTrait for ActionPicker {}
@@ -22,20 +24,21 @@ impl ActionPicker {
     }
 }
 
-impl AsRef<TabData<CardCache>> for ActionPicker {
-    fn as_ref(&self) -> &TabData<CardCache> {
+impl AsRef<MyTabData> for ActionPicker {
+    fn as_ref(&self) -> &MyTabData {
         &self.tab_data
     }
 }
 
-impl AsMut<TabData<CardCache>> for ActionPicker {
-    fn as_mut(&mut self) -> &mut TabData<CardCache> {
+impl AsMut<MyTabData> for ActionPicker {
+    fn as_mut(&mut self) -> &mut MyTabData {
         &mut self.tab_data
     }
 }
 
 impl Tab for ActionPicker {
     type AppState = CardCache;
+    type ReturnType = ReturnType;
 
     fn widgets(
         &mut self,
@@ -64,11 +67,11 @@ impl Tab for ActionPicker {
         true
     }
 
-    fn tabdata(&mut self) -> &mut TabData<Self::AppState> {
+    fn tabdata(&mut self) -> &mut TabData<Self::AppState, Self::ReturnType> {
         self.as_mut()
     }
 
-    fn tabdata_ref(&self) -> &TabData<Self::AppState> {
+    fn tabdata_ref(&self) -> &TabData<Self::AppState, Self::ReturnType> {
         self.as_ref()
     }
 

@@ -9,7 +9,7 @@ use mischef::{Tab, TabData, Widget};
 use ratatui::prelude::*;
 use strum_macros::{EnumIter, EnumString};
 
-use crate::{popups::CardReviewer, widgets::enum_choice::EnumChoice, CardCache};
+use crate::{popups::CardReviewer, widgets::enum_choice::EnumChoice, CardCache, ReturnType};
 
 // Like review filter but all of the dependencies have to be strong memories
 fn confident_filter() -> FilterUtil {
@@ -33,7 +33,7 @@ enum MenuChoice {
 
 pub struct ReviewMenu {
     option: EnumChoice<MenuChoice>,
-    pub tab_data: TabData<CardCache>,
+    pub tab_data: TabData<CardCache, ReturnType>,
 }
 
 impl ReviewMenu {
@@ -47,8 +47,9 @@ impl ReviewMenu {
 
 impl Tab for ReviewMenu {
     type AppState = CardCache;
+    type ReturnType = ReturnType;
 
-    fn tabdata_ref(&self) -> &TabData<Self::AppState> {
+    fn tabdata_ref(&self) -> &TabData<Self::AppState, Self::ReturnType> {
         &self.tab_data
     }
 
@@ -56,7 +57,7 @@ impl Tab for ReviewMenu {
         vec![(&mut self.option, area)]
     }
 
-    fn tabdata(&mut self) -> &mut TabData<Self::AppState> {
+    fn tabdata(&mut self) -> &mut TabData<Self::AppState, Self::ReturnType> {
         &mut self.tab_data
     }
 

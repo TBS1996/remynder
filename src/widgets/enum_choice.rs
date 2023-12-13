@@ -10,7 +10,7 @@ use ratatui::{
 };
 use strum::IntoEnumIterator;
 
-use crate::{utils::StatefulList, CardAction, CardCache};
+use crate::{utils::StatefulList, CardAction, CardCache, ReturnType};
 
 fn get_enum_options<T: IntoEnumIterator + std::fmt::Display>() -> Vec<String> {
     T::iter().map(|x| x.to_string()).collect()
@@ -18,7 +18,7 @@ fn get_enum_options<T: IntoEnumIterator + std::fmt::Display>() -> Vec<String> {
 
 pub struct EnumChoice<T: IntoEnumIterator> {
     list: StatefulList<String>,
-    tabdata: TabData<CardCache>,
+    tabdata: TabData<CardCache, ReturnType>,
     _marker: PhantomData<T>,
 }
 
@@ -95,6 +95,7 @@ impl<T: strum::IntoEnumIterator> Widget for EnumChoice<T> {
 
 impl Tab for EnumChoice<CardAction> {
     type AppState = CardCache;
+    type ReturnType = ReturnType;
 
     fn widgets(&mut self, area: Rect) -> Vec<(&mut dyn Widget<AppData = Self::AppState>, Rect)> {
         vec![(self, area)]
@@ -104,11 +105,11 @@ impl Tab for EnumChoice<CardAction> {
         "choose card action"
     }
 
-    fn tabdata(&mut self) -> &mut TabData<Self::AppState> {
+    fn tabdata(&mut self) -> &mut TabData<Self::AppState, Self::ReturnType> {
         &mut self.tabdata
     }
 
-    fn tabdata_ref(&self) -> &TabData<Self::AppState> {
+    fn tabdata_ref(&self) -> &TabData<Self::AppState, Self::ReturnType> {
         &self.tabdata
     }
 }

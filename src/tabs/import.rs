@@ -2,11 +2,11 @@ use crossterm::event::KeyCode;
 use mischef::{Tab, TabData};
 use speki_backend::{card::Card, categories::Category};
 
-use crate::{widgets::file_finder::FileFinder, CardCache};
+use crate::{widgets::file_finder::FileFinder, CardCache, ReturnType};
 
 pub struct Importer {
     file_finder: FileFinder,
-    tab_data: TabData<CardCache>,
+    tab_data: TabData<CardCache, ReturnType>,
 }
 
 impl Importer {
@@ -20,6 +20,7 @@ impl Importer {
 
 impl Tab for Importer {
     type AppState = CardCache;
+    type ReturnType = ReturnType;
 
     fn tab_keyhandler_selected(
         &mut self,
@@ -49,11 +50,11 @@ impl Tab for Importer {
         vec![(&mut self.file_finder, area)]
     }
 
-    fn tabdata(&mut self) -> &mut TabData<Self::AppState> {
+    fn tabdata(&mut self) -> &mut TabData<Self::AppState, Self::ReturnType> {
         &mut self.tab_data
     }
 
-    fn tabdata_ref(&self) -> &TabData<Self::AppState> {
+    fn tabdata_ref(&self) -> &TabData<Self::AppState, Self::ReturnType> {
         &self.tab_data
     }
 

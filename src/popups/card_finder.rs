@@ -8,6 +8,7 @@ use speki_backend::Id;
 use crate::{
     split_off,
     utils::{StatefulList, TextDisplay},
+    MyTabData, ReturnType,
 };
 
 use super::*;
@@ -16,7 +17,7 @@ use super::*;
 pub struct CardFinder {
     search: TextDisplay,
     cards: StatefulList<Id>,
-    tab_data: TabData<CardCache>,
+    tab_data: MyTabData,
     index: Indexer,
 }
 
@@ -35,6 +36,7 @@ impl CardFinder {
 
 impl Tab for CardFinder {
     type AppState = CardCache;
+    type ReturnType = ReturnType;
 
     fn tab_keyhandler(
         &mut self,
@@ -49,7 +51,7 @@ impl Tab for CardFinder {
             self.exit_tab();
         } else if key.code == KeyCode::Enter {
             if let Some(card) = self.cards.selected().cloned() {
-                self.resolve_tab(Box::new(card));
+                self.resolve_tab(ReturnType::Card(card));
             }
         } else {
             self.index.input(&key, cache);
@@ -90,11 +92,11 @@ impl Tab for CardFinder {
         "card finder"
     }
 
-    fn tabdata(&mut self) -> &mut TabData<Self::AppState> {
+    fn tabdata(&mut self) -> &mut TabData<Self::AppState, Self::ReturnType> {
         &mut self.tab_data
     }
 
-    fn tabdata_ref(&self) -> &TabData<Self::AppState> {
+    fn tabdata_ref(&self) -> &TabData<Self::AppState, Self::ReturnType> {
         &self.tab_data
     }
 }

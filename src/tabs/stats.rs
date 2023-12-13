@@ -3,10 +3,10 @@ use std::collections::BTreeMap;
 use mischef::{Tab, TabData};
 use speki_backend::common::duration_to_days;
 
-use crate::{utils::TextDisplay, CardCache};
+use crate::{utils::TextDisplay, CardCache, ReturnType};
 
 pub struct Stats {
-    tab_data: TabData<CardCache>,
+    tab_data: TabData<CardCache, ReturnType>,
     info: TextDisplay,
 }
 
@@ -85,6 +85,7 @@ impl Stats {
 
 impl Tab for Stats {
     type AppState = CardCache;
+    type ReturnType = ReturnType;
 
     fn widgets(
         &mut self,
@@ -100,11 +101,11 @@ impl Tab for Stats {
         "stats"
     }
 
-    fn tabdata(&mut self) -> &mut TabData<Self::AppState> {
+    fn tabdata(&mut self) -> &mut TabData<Self::AppState, Self::ReturnType> {
         &mut self.tab_data
     }
 
-    fn tabdata_ref(&self) -> &TabData<Self::AppState> {
+    fn tabdata_ref(&self) -> &TabData<Self::AppState, Self::ReturnType> {
         &self.tab_data
     }
 

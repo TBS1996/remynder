@@ -3,7 +3,7 @@ use speki_backend::Id;
 use crate::{
     hsplit2,
     utils::{TextInput, TreeWidget},
-    vsplit2,
+    vsplit2, MyTabData, ReturnType,
 };
 
 use super::*;
@@ -14,7 +14,7 @@ pub struct CardInspector<'a> {
     back: TextInput<'a>,
     dependencies: TreeWidget<'a, Id>,
     dependents: TreeWidget<'a, Id>,
-    tab_data: TabData<CardCache>,
+    tab_data: MyTabData,
 }
 
 impl CardInspector<'_> {
@@ -36,6 +36,7 @@ impl CardInspector<'_> {
 
 impl<'a> Tab for CardInspector<'a> {
     type AppState = CardCache;
+    type ReturnType = ReturnType;
 
     fn title(&self) -> &str {
         "inspect card"
@@ -61,11 +62,11 @@ impl<'a> Tab for CardInspector<'a> {
         ]
     }
 
-    fn tabdata(&mut self) -> &mut TabData<Self::AppState> {
+    fn tabdata(&mut self) -> &mut TabData<Self::AppState, Self::ReturnType> {
         &mut self.tab_data
     }
 
-    fn tabdata_ref(&self) -> &TabData<Self::AppState> {
+    fn tabdata_ref(&self) -> &TabData<Self::AppState, Self::ReturnType> {
         &self.tab_data
     }
 }

@@ -3,14 +3,14 @@ use speki_backend::{categories::Category, saved_card::SavedCard};
 
 use mischef::{PopUpState, Tab, TabData, Widget};
 
-use crate::{popups::AddCard, CardCache};
+use crate::{popups::AddCard, CardCache, ReturnType};
 
 /// Just a thin wrapper around AddCard because I wanted a popup that creates a single card,
 /// and this keeps the code dry.
 pub struct CardAdder<'a> {
     add_card: AddCard<'a>,
     category: Category,
-    tab_data: TabData<CardCache>,
+    tab_data: TabData<CardCache, ReturnType>,
 }
 
 impl CardAdder<'_> {
@@ -34,15 +34,17 @@ impl CardAdder<'_> {
 
 impl Tab for CardAdder<'_> {
     type AppState = CardCache;
+    type ReturnType = ReturnType;
 
-    fn tabdata_ref(&self) -> &TabData<Self::AppState> {
+    fn tabdata_ref(&self) -> &TabData<Self::AppState, Self::ReturnType> {
         self.add_card.tabdata_ref()
     }
 
-    fn handle_popup_value(&mut self, _: &mut Self::AppState, card: Box<dyn std::any::Any>) {
-        let card: SavedCard = *card.downcast().unwrap();
-        let category = card.category().to_owned();
-        self.category = category.clone();
+    fn handle_popup_value(&mut self, _: &mut Self::AppState, card: ReturnType) {
+        if let ReturnType::SavedCard(card) = card {
+            let category = card.category().to_owned();
+            self.category = category.clone();
+        }
     }
 
     fn pre_render_hook(&mut self, _app_data: &mut Self::AppState) {
@@ -76,7 +78,7 @@ impl Tab for CardAdder<'_> {
         "add cards"
     }
 
-    fn tabdata(&mut self) -> &mut TabData<Self::AppState> {
+    fn tabdata(&mut self) -> &mut TabData<Self::AppState, Self::ReturnType> {
         self.add_card.tabdata()
     }
 }

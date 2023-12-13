@@ -6,16 +6,17 @@ use mischef::{Tab, TabData, Widget};
 use speki_backend::categories::Category;
 use tui_tree_widget::TreeItem;
 
-use crate::{utils::TreeWidget, CardCache};
+use crate::{utils::TreeWidget, CardCache, MyTabData, ReturnType};
 
 #[derive(Debug)]
 pub struct CatChoice<'a> {
     tree: TreeWidget<'a, PathBuf>,
-    tabdata: TabData<CardCache>,
+    tabdata: MyTabData,
 }
 
 impl Tab for CatChoice<'_> {
     type AppState = CardCache;
+    type ReturnType = ReturnType;
 
     fn widgets(
         &mut self,
@@ -27,7 +28,7 @@ impl Tab for CatChoice<'_> {
         vec![(&mut self.tree, area)]
     }
 
-    fn tabdata(&mut self) -> &mut TabData<Self::AppState> {
+    fn tabdata(&mut self) -> &mut TabData<Self::AppState, Self::ReturnType> {
         &mut self.tabdata
     }
 
@@ -43,7 +44,7 @@ impl Tab for CatChoice<'_> {
         if key.code == KeyCode::Enter {
             if let Some(p) = self.tree.selected() {
                 let category = Category::from_dir_path(p.as_path());
-                self.resolve_tab(Box::new(category));
+                self.resolve_tab(ReturnType::Category(category));
             }
         } else if key.code == KeyCode::Esc {
             self.exit_tab();
@@ -53,7 +54,7 @@ impl Tab for CatChoice<'_> {
         false
     }
 
-    fn tabdata_ref(&self) -> &TabData<Self::AppState> {
+    fn tabdata_ref(&self) -> &TabData<Self::AppState, Self::ReturnType> {
         &self.tabdata
     }
 }

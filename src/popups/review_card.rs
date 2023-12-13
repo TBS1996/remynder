@@ -11,7 +11,7 @@ use crate::{
     hsplit2, split_off,
     tabs::review::CurrentCard,
     utils::{card_dependencies, card_dependents, TextDisplay, TextInput, TreeWidget},
-    vsplit2, CardAction, CardActionTrait, CardCache, Pipeline,
+    vsplit2, CardAction, CardActionTrait, CardCache, MyTabData, Pipeline, ReturnType,
 };
 
 pub struct CardReviewer<'a> {
@@ -22,7 +22,7 @@ pub struct CardReviewer<'a> {
     pub back: TextInput<'a>,
     pub card_info: TextDisplay,
     pub info: TextDisplay,
-    pub tab_data: TabData<CardCache>,
+    pub tab_data: MyTabData,
 }
 
 impl CardReviewer<'_> {
@@ -129,8 +129,9 @@ pub fn card_info(card: Id, cache: &mut CardCache) -> String {
 
 impl Tab for CardReviewer<'_> {
     type AppState = CardCache;
+    type ReturnType = ReturnType;
 
-    fn tabdata_ref(&self) -> &TabData<Self::AppState> {
+    fn tabdata_ref(&self) -> &TabData<Self::AppState, Self::ReturnType> {
         &self.tab_data
     }
 
@@ -153,7 +154,7 @@ impl Tab for CardReviewer<'_> {
         ]
     }
 
-    fn tabdata(&mut self) -> &mut TabData<Self::AppState> {
+    fn tabdata(&mut self) -> &mut TabData<Self::AppState, Self::ReturnType> {
         &mut self.tab_data
     }
 
